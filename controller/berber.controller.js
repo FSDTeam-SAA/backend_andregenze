@@ -12,15 +12,42 @@ import httpStatus from "http-status";
 
 export const setupBerberProfile = catchAsync(async (req, res) => {
   const user = await User.findById(req.user._id);
+  if (!user) throw new AppError(httpStatus.NOT_FOUND, "User not found");
+
   if (user.role !== "berber") {
     throw new AppError(httpStatus.FORBIDDEN, "Berber setup only");
   }
+
   if (user.profileCompletion > 0) {
     throw new AppError(httpStatus.BAD_REQUEST, "Profile already set up");
   }
 
+  // ✅ Parse JSON fields
+  const parseIfJson = (v) => {
+    if (typeof v !== "string") return v;
+    try {
+      return JSON.parse(v);
+    } catch {
+      return v;
+    }
+  };
+
+  const jsonFields = [
+    "socialMedia",
+    "staffMembers",
+    "openingHours",
+    "services",
+    "languages",
+    "acceptedPayments",
+    "portfolioDescriptions",
+    "address",
+  ];
+
+  jsonFields.forEach((k) => {
+    if (req.body?.[k] != null) req.body[k] = parseIfJson(req.body[k]);
+  });
+
   const {
-    contactPersonName,
     shopDescription,
     socialMedia,
     staffMembers,
@@ -34,64 +61,116 @@ export const setupBerberProfile = catchAsync(async (req, res) => {
     address,
   } = req.body;
 
-  // Validation
-  if (!services?.length || !openingHours?.length || !languages?.length) {
+  // ✅ Validations
+  if (!Array.isArray(services) || services.length === 0) {
     throw new AppError(
       httpStatus.BAD_REQUEST,
-      "Required fields missing (services, openingHours, languages)"
+      "Required field missing: services"
     );
   }
 
-  // Set fields
-  user.contactPersonName = contactPersonName || user.name;
-  user.shopDescription = shopDescription;
-  user.socialMedia = socialMedia || {};
-  user.staffMembers = staffMembers || [];
+  if (!Array.isArray(openingHours) || openingHours.length === 0) {
+    throw new AppError(
+      httpStatus.BAD_REQUEST,
+      "Required field missing: openingHours"
+    );
+  }
+
+  if (!Array.isArray(languages) || languages.length === 0) {
+    throw new AppError(
+      httpStatus.BAD_REQUEST,
+      "Required field missing: languages"
+    );
+  }
+
+  // ✅ Initialize user.address if it doesn't exist
+  if (!user.address) {
+    user.address = {};
+  }
+
+  // ✅ Assign fields
+  user.shopDescription = shopDescription || "";
+
+  user.socialMedia =
+    socialMedia &&
+    typeof socialMedia === "object" &&
+    !Array.isArray(socialMedia)
+      ? socialMedia
+      : {};
+
+  user.staffMembers = Array.isArray(staffMembers) ? staffMembers : [];
   user.openingHours = openingHours;
   user.services = services;
   user.languages = languages;
-  user.acceptedPayments = acceptedPayments || [];
+  user.acceptedPayments = Array.isArray(acceptedPayments)
+    ? acceptedPayments
+    : [];
 
-  // Uploads
-  if (!req.files?.shopLogo) {
+  // ✅ Address handling
+  if (address && typeof address === "object" && !Array.isArray(address)) {
+    const { location, ...safeAddress } = address; // ✅ drop location completely
+    Object.assign(user.address, safeAddress);
+  }
+
+  // ✅ Handle geo location
+  const latNum = Number(lat);
+  const lngNum = Number(lng);
+
+  if (Number.isFinite(latNum) && Number.isFinite(lngNum)) {
+    user.address.location = {
+      type: "Point",
+      coordinates: [lngNum, latNum],
+    };
+  } else {
+    // ✅ If no valid lat/lng, remove location field entirely
+    user.address.location = null;
+  }
+
+  // ✅ Upload shop logo
+  if (!req.files?.shopLogo?.[0]) {
     throw new AppError(httpStatus.BAD_REQUEST, "Shop logo required");
   }
+
   const logoUpload = await uploadOnCloudinary(req.files.shopLogo[0].buffer);
   user.shopLogo = {
     public_id: logoUpload.public_id,
     url: logoUpload.secure_url,
   };
 
+  // ✅ Portfolio images
+  const descArr = Array.isArray(portfolioDescriptions)
+    ? portfolioDescriptions
+    : [];
   let portfolioImages = [];
-  if (req.files?.portfolioImages) {
+
+  if (req.files?.portfolioImages?.length) {
     const uploads = await Promise.all(
       req.files.portfolioImages
         .slice(0, 10)
         .map((file) => uploadOnCloudinary(file.buffer))
     );
+
     portfolioImages = uploads.map((upload, i) => ({
       public_id: upload.public_id,
       url: upload.secure_url,
-      description: portfolioDescriptions?.[i] || "",
+      description: descArr[i] || "",
     }));
   }
+
   user.portfolioImages = portfolioImages;
 
-  // Address with lat/lng for geo
-  user.address = address;
-  if (lat && lng) {
-    User.reqBody = { lat, lng };
+  // ✅ Ensure address exists before saving
+  if (!user.address) {
+    user.address = {};
   }
 
   await user.save();
-
-  delete User.reqBody;
 
   sendResponse(res, {
     statusCode: httpStatus.CREATED,
     success: true,
     message: "Berber profile set up successfully",
-    data: { ...user.toObject(), profileCompletion: user.profileCompletion },
+    data: user.toObject(),
   });
 });
 
