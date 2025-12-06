@@ -28,10 +28,7 @@ export const updateProfile = catchAsync(async (req, res) => {
   if (updates.dob) user.dob = updates.dob;
   if (updates.shopName) user.shopName = updates.shopName;
   if (updates.phone) user.phone = updates.phone;
-  if (updates.address && typeof updates.address === "string")
-    user.address = updates.address;
-  if (updates.address && typeof updates.address === "object")
-    user.address = { ...user.address, ...updates.address };
+  if (updates.address2) user.address2 = updates.address2;
   if (updates.language) user.language = updates.language;
 
   if (updates.contactPersonName)
@@ -47,8 +44,8 @@ export const updateProfile = catchAsync(async (req, res) => {
     user.acceptedPayments = updates.acceptedPayments;
 
   // Existing avatar upload
-  if (req.file) {
-    const upload = await uploadOnCloudinary(req.file.buffer);
+  if (req.files?.avatar) {
+    const upload = await uploadOnCloudinary(req.files.avatar[0].buffer);
     user.avatar = { public_id: upload.public_id, url: upload.secure_url };
   }
 

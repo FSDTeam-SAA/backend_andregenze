@@ -33,12 +33,24 @@ const userSchema = new Schema(
       public_id: { type: String, default: "" },
       url: { type: String, default: "" },
     },
+    address2: { type: String },
     address: {
       street: { type: String },
       houseNumber: { type: String },
       postalCode: { type: String },
       city: { type: String },
       country: { type: String },
+      location: {
+        type: {
+          type: String,
+          enum: ["Point"],
+          default: "Point",
+        },
+        coordinates: {
+          type: [Number],
+          default: undefined,
+        },
+      },
     },
     socialMedia: {
       facebook: { type: String },
