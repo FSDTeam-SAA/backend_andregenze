@@ -6,6 +6,7 @@ import paymentRoute from "../route/payment.route.js";
 import contactUsRoute from "../route/contactUs.route.js";
 import adminRoute from "../route/admin.route.js";
 import berberRoute from "../route/berber.route.js";
+import contestRoute from "../route/contest.route.js";
 
 const router = express.Router();
 
@@ -16,4 +17,5 @@ router.use("/payment", paymentRoute);
 router.use("/contact-us", contactUsRoute);
 router.use("/admin", adminRoute);
 router.use("/berber", berberRoute);
+router.use("/contest", contestRoute);
 export default router;
