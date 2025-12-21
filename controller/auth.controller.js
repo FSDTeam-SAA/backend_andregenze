@@ -63,6 +63,7 @@ export const register = catchAsync(async (req, res, next) => {
   try {
     await sendEmail(email, otp);
   } catch (err) {
+    console.log(err);
     return next(new AppError(500, "Failed to send OTP email"));
   }
 
