@@ -44,11 +44,9 @@ const userSchema = new Schema(
         type: {
           type: String,
           enum: ["Point"],
-          default: "Point",
         },
         coordinates: {
           type: [Number],
-          default: undefined,
         },
       },
     },
@@ -115,6 +113,11 @@ const userSchema = new Schema(
       enum: ["user", "berber", "admin"],
       default: "user",
     },
+    vendorStatus: {
+      type: String,
+      enum: ["pending", "verified"],
+      default: "verified"
+    },
     verificationInfo: {
       verified: { type: Boolean, default: false },
       token: { type: String, default: "" },
@@ -173,6 +176,10 @@ userSchema.statics.isPasswordMatched = async function (
 };
 
 // Geo index
-userSchema.index({ "address.location": "2dsphere" });
+userSchema.index(
+  { "address.location": "2dsphere" },
+  { partialFilterExpression: { "address.location.coordinates": { $exists: true } } }
+);
+
 
 export const User = mongoose.model("User", userSchema);
