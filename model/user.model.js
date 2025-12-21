@@ -116,7 +116,7 @@ const userSchema = new Schema(
     vendorStatus: {
       type: String,
       enum: ["pending", "verified"],
-      default: "verified"
+      default: "pending",
     },
     verificationInfo: {
       verified: { type: Boolean, default: false },
@@ -165,7 +165,7 @@ userSchema.statics.isUserExistsByEmail = async function (email) {
 
 userSchema.statics.isOTPVerified = async function (id) {
   const user = await this.findById(id).select("+verificationInfo");
-  return user?.verificationInfo.verified;
+  return user?.isEmailVerified;
 };
 
 userSchema.statics.isPasswordMatched = async function (
@@ -178,8 +178,11 @@ userSchema.statics.isPasswordMatched = async function (
 // Geo index
 userSchema.index(
   { "address.location": "2dsphere" },
-  { partialFilterExpression: { "address.location.coordinates": { $exists: true } } }
+  {
+    partialFilterExpression: {
+      "address.location.coordinates": { $exists: true },
+    },
+  }
 );
-
 
 export const User = mongoose.model("User", userSchema);
