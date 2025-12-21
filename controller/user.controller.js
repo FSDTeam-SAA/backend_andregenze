@@ -7,6 +7,7 @@ import catchAsync from "../utils/catchAsync.js";
 import { Contest } from "../model/contest.model.js";
 import { Review } from "../model/review.model.js";
 import { Reservation } from "../model/reservation.model.js";
+import { Participation } from "../model/participation.model.js";
 
 export const getProfile = catchAsync(async (req, res) => {
   const user = await User.findById(req.user._id).select(
@@ -344,7 +345,7 @@ export const updateReservation = catchAsync(async (req, res) => {
   reservation.time = time;
   await reservation.save();
 
-  await reservation.populate(["user", "berber"]);
+  await reservation.populate(["user", "berber"], "name shopName avatar");
   sendResponse(res, {
     statusCode: httpStatus.OK,
     success: true,
@@ -432,20 +433,39 @@ export const getReviews = catchAsync(async (req, res) => {
   });
 });
 
-// Contests (reuse, add to user)
+// Contest Controllers
 export const getCurrentContest = catchAsync(async (req, res) => {
-  // Same as berber
-  const contest = await Contest.findOne({ isActive: true })
-    .populate({
-      path: "participants",
-      populate: { path: "user", select: "name avatar role" },
-    })
-    .sort({ votes: -1 });
-  if (!contest) throw new AppError(httpStatus.NOT_FOUND, "No active contest");
+  const userId = req.user?._id;
+
+  const contest = await Contest.findOne({ isActive: true }).populate({
+    path: "participants",
+    populate: {
+      path: "user",
+      select: "name avatar",
+    },
+    options: { sort: { votes: -1 } },
+  });
+
+  if (!contest) {
+    throw new AppError(httpStatus.NOT_FOUND, "No active contest");
+  }
+
+  let myParticipation = null;
+
+  if (userId) {
+    myParticipation = await Participation.findOne({
+      contest: contest._id,
+      user: userId,
+    }).populate("user", "name avatar");
+  }
+
   sendResponse(res, {
     statusCode: httpStatus.OK,
     success: true,
     message: "Current contest fetched",
-    data: contest,
+    data: {
+      contest,
+      myParticipation,
+    },
   });
 });

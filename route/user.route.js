@@ -37,13 +37,13 @@ router.put("/settings", protect, updateSettings);
 router.get("/berbers", searchBerbers);
 
 // Reservations
-router.post("/reservations", createReservation);
-router.get("/reservations", getMyReservations);
-router.put("/reservations/:id", updateReservation);
-router.delete("/reservations/:id", deleteReservation);
+router.post("/reservations", protect, createReservation);
+router.get("/reservations", protect, getMyReservations);
+router.put("/reservations/:id", protect, updateReservation);
+router.delete("/reservations/:id", protect, deleteReservation);
 
 // Reviews
-router.post("/reviews", addReview);
+router.post("/reviews", protect, addReview);
 router.get("/reviews/:berberId", getReviews);
 
 export default router;

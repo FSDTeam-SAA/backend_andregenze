@@ -200,7 +200,7 @@ export const confirmReservation = catchAsync(async (req, res) => {
   reservation.status = "confirmed";
   await reservation.save();
 
-  await reservation.populate(["user", "berber"]);
+  await reservation.populate(["user", "berber"], "name shopName avatar");
   sendResponse(res, {
     statusCode: httpStatus.OK,
     success: true,
@@ -268,21 +268,40 @@ export const getCampaignStats = catchAsync(async (req, res) => {
   });
 });
 
-// Contest Controllers (Berber view/participate)
+// Contest Controllers
 export const getCurrentContest = catchAsync(async (req, res) => {
-  const contest = await Contest.findOne({ isActive: true })
-    .populate({
-      path: "participants",
-      populate: { path: "user", select: "name avatar" },
-    })
-    .sort({ votes: -1 }); // Leaderboard
-  if (!contest) throw new AppError(httpStatus.NOT_FOUND, "No active contest");
+  const userId = req.user?._id;
+
+  const contest = await Contest.findOne({ isActive: true }).populate({
+    path: "participants",
+    populate: {
+      path: "user",
+      select: "name avatar",
+    },
+    options: { sort: { votes: -1 } },
+  });
+
+  if (!contest) {
+    throw new AppError(httpStatus.NOT_FOUND, "No active contest");
+  }
+
+  let myParticipation = null;
+
+  if (userId) {
+    myParticipation = await Participation.findOne({
+      contest: contest._id,
+      user: userId,
+    }).populate("user", "name avatar");
+  }
 
   sendResponse(res, {
     statusCode: httpStatus.OK,
     success: true,
     message: "Current contest fetched",
-    data: contest,
+    data: {
+      contest,
+      myParticipation,
+    },
   });
 });
 
