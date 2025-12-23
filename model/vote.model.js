@@ -6,7 +6,6 @@ const voteSchema = new Schema(
       type: Schema.Types.ObjectId,
       ref: "User",
       required: true,
-      unique: true,
     },
     participation: {
       type: Schema.Types.ObjectId,
@@ -16,5 +15,7 @@ const voteSchema = new Schema(
   },
   { timestamps: true }
 );
+
+voteSchema.index({ user: 1, participation: 1 }, { unique: true });
 
 export const Vote = mongoose.model("Vote", voteSchema);

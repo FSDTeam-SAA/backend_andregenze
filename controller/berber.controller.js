@@ -414,18 +414,34 @@ export const deleteParticipation = catchAsync(async (req, res) => {
 });
 
 export const voteForParticipation = catchAsync(async (req, res) => {
-  // Called by users, but in berber flow for view
   const { participationId } = req.params;
-  const existingVote = await Vote.findOne({
-    user: req.user._id,
-    participation: participationId,
-  });
-  if (existingVote) throw new AppError(httpStatus.BAD_REQUEST, "Already voted");
+  const userId = req.user._id;
 
-  const vote = await Vote.create({
-    user: req.user._id,
+  const existingVote = await Vote.findOne({
+    user: userId,
     participation: participationId,
   });
+
+  if (existingVote) {
+    await Vote.findByIdAndDelete(existingVote._id);
+
+    await Participation.findByIdAndUpdate(participationId, {
+      $inc: { votes: -1 },
+    });
+
+    return sendResponse(res, {
+      statusCode: httpStatus.OK,
+      success: true,
+      message: "Vote removed",
+      data: { voted: false },
+    });
+  }
+
+  await Vote.create({
+    user: userId,
+    participation: participationId,
+  });
+
   await Participation.findByIdAndUpdate(participationId, {
     $inc: { votes: 1 },
   });
@@ -433,7 +449,7 @@ export const voteForParticipation = catchAsync(async (req, res) => {
   sendResponse(res, {
     statusCode: httpStatus.CREATED,
     success: true,
-    message: "Vote cast",
-    data: vote,
+    message: "Vote added",
+    data: { voted: true },
   });
 });

@@ -1,3 +1,4 @@
+import { min } from "moment";
 import mongoose, { Schema } from "mongoose";
 
 const participationSchema = new Schema(
@@ -9,7 +10,7 @@ const participationSchema = new Schema(
       url: { type: String },
     },
     description: { type: String, maxlength: 500 },
-    votes: { type: Number, default: 0 },
+    votes: { type: Number, default: 0, min: 0 },
     frame: { type: String },
     submittedAt: { type: Date, default: Date.now },
     isDisqualified: { type: Boolean, default: false },
