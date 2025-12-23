@@ -1,4 +1,3 @@
-import { min } from "moment";
 import mongoose, { Schema } from "mongoose";
 
 const participationSchema = new Schema(
