@@ -12,6 +12,7 @@ const userSchema = new Schema(
       lowercase: true,
     },
     password: { type: String, select: false },
+    qrCode: { type: String, default: "" },
     phone: {
       type: String,
       trim: true,

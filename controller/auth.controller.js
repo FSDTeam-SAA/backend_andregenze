@@ -5,6 +5,7 @@ import catchAsync from "../utils/catchAsync.js";
 import { generateOTP } from "../utils/commonMethod.js";
 import { sendEmail } from "../utils/sendEmail.js";
 import sendResponse from "../utils/sendResponse.js";
+import QRCode from "qrcode";
 import { User } from "./../model/user.model.js";
 
 const generateVerificationCode = () => {
@@ -55,6 +56,11 @@ export const register = catchAsync(async (req, res, next) => {
 
   const otp = generateVerificationCode().toString();
   const otpExpiry = Date.now() + 10 * 60 * 1000;
+
+  const qrCodeData = user._id.toString();
+    const qrBase64 = await QRCode.toDataURL(qrCodeData);
+
+  user.qrCode = qrBase64; // base64 string (data:image/png;base64,...)
 
   user.resetPasswordOTP = otp;
   user.resetPasswordOTPExpiry = otpExpiry;

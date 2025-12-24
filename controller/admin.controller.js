@@ -52,6 +52,23 @@ export const getContests = catchAsync(async (req, res) => {
     data: contests,
   });
 });
+export const getContestById = catchAsync(async (req, res) => {
+  const contests = await Contest.findById(req.params.id)
+    .populate({
+      path: "participants",
+      populate: { path: "user", select: "name avatar" },
+      options: { sort: { votes: -1 } }, // Leaderboard
+    })
+    .populate("winners", "photo votes submittedAt user")
+    .sort({ startDate: -1 });
+
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: "Contests fetched",
+    data: contests,
+  });
+});
 
 export const updateContest = catchAsync(async (req, res) => {
   const { id } = req.params;
