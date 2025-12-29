@@ -497,6 +497,19 @@ export const searchBerbers = catchAsync(async (req, res) => {
   });
 });
 
+export const getBerber = catchAsync(async (req, res) => {
+  const { id } = req.params;
+  const berber = await User.findById(id);
+  if (!berber) throw new AppError(httpStatus.NOT_FOUND, "Berber not found");
+
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: "Berber fetched",
+    data: berber,
+  });
+});
+
 // Reservations
 export const createReservation = catchAsync(async (req, res) => {
   const { berberId, serviceName, date, time } = req.body;

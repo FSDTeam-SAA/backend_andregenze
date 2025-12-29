@@ -6,6 +6,7 @@ import {
   deleteAccount,
   updateSettings,
   searchBerbers,
+  getBerber,
   createReservation,
   updateReservation,
   deleteReservation,
@@ -35,6 +36,7 @@ router.put("/settings", protect, updateSettings);
 
 // Search
 router.get("/berbers", searchBerbers);
+router.get("/berbers/:id", getBerber);
 
 // Reservations
 router.post("/reservations", protect, createReservation);
