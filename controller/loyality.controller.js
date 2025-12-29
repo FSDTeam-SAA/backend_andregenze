@@ -14,11 +14,11 @@ export const createLoyalty = catchAsync(async (req, res, next) => {
         throw new AppError(400, "shopId and userId are required");
     }
 
-    // Prevent duplicate
-    const exists = await loyalty.findOne({ shopId, userId });
-    if (exists) {
-        throw new AppError(400, "Loyalty already exists for this shop & user");
-    }
+    // // Prevent duplicate
+    // const exists = await loyalty.findOne({ shopId, userId });
+    // if (exists) {
+    //     throw new AppError(400, "Loyalty already exists for this shop & user");
+    // }
 
     const doc = await loyalty.create({ shopId, userId });
     sendResponse(res, {
