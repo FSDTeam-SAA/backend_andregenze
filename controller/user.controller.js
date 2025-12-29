@@ -9,6 +9,72 @@ import { Review } from "../model/review.model.js";
 import { Reservation } from "../model/reservation.model.js";
 import { Participation } from "../model/participation.model.js";
 
+const DEFAULT_TZ = "Asia/Dhaka";
+
+// helper: get day + minutes now; allow overrides for testing
+const getDayAndMinutesNow = (req) => {
+  // override for testing:
+  // /search?openNow=true&day=monday&at=12:00
+  const forcedDay = req.query.day?.toString().toLowerCase();
+  const forcedAt = req.query.at?.toString();
+
+  if (forcedDay && forcedAt && forcedAt.includes(":")) {
+    const [h, m] = forcedAt.split(":").map((x) => parseInt(x, 10));
+    if (!Number.isNaN(h) && !Number.isNaN(m)) {
+      return {
+        day: forcedDay,
+        minutesNow: h * 60 + m,
+        debug: { forcedDay, forcedAt },
+      };
+    }
+  }
+
+  const tz = (req.query.tz || DEFAULT_TZ).toString();
+  const now = new Date();
+
+  // Try timezone-aware calculation (may fail if Intl/tzdata not available)
+  try {
+    const day = new Intl.DateTimeFormat("en-US", {
+      timeZone: tz,
+      weekday: "long",
+    })
+      .format(now)
+      .toLowerCase();
+
+    const parts = new Intl.DateTimeFormat("en-US", {
+      timeZone: tz,
+      hour: "numeric",
+      minute: "2-digit",
+      hour12: false,
+    }).formatToParts(now);
+
+    const hh = parseInt(parts.find((p) => p.type === "hour")?.value ?? "0", 10);
+    const mm = parseInt(
+      parts.find((p) => p.type === "minute")?.value ?? "0",
+      10
+    );
+
+    return { day, minutesNow: hh * 60 + mm, debug: { tzUsed: tz } };
+  } catch (e) {
+    // Fallback: server local time (still lets it work)
+    const day = [
+      "sunday",
+      "monday",
+      "tuesday",
+      "wednesday",
+      "thursday",
+      "friday",
+      "saturday",
+    ][now.getDay()];
+    const minutesNow = now.getHours() * 60 + now.getMinutes();
+    return {
+      day,
+      minutesNow,
+      debug: { tzFailed: tz, fallback: "server_local_time" },
+    };
+  }
+};
+
 export const getProfile = catchAsync(async (req, res) => {
   const user = await User.findById(req.user._id).select(
     "-password -refreshToken -verificationInfo -password_reset_token"
@@ -151,45 +217,84 @@ export const updateSettings = catchAsync(async (req, res) => {
 });
 
 export const searchBerbers = catchAsync(async (req, res) => {
-  const {
-    search,
-    sortBy = "distance",
-    distance = 50,
-    languages,
-    openNow,
-    payments,
-    minRating = 0,
-    userLat,
-    userLng,
-  } = req.query;
+  const search = req.query.search?.trim();
+  const sortBy = (req.query.sortBy || "distance").trim();
+  const distanceKm = Number(req.query.distance || 50);
 
-  // Base match
-  let baseFilter = { role: "berber", profileCompletion: { $gte: 80 } };
+  const languagesRaw = req.query.languages; // "Bangla,English"
+  const paymentsRaw = req.query.payments || req.query.acceptedPayments; // "cash,bank_card"
 
-  // Build aggregation pipeline
-  let pipeline = [];
+  const openNow = req.query.openNow === "true";
 
-  // Geo near
-  let useGeo = false;
-  if (userLat && userLng) {
-    useGeo = true;
-    const userPoint = {
-      type: "Point",
-      coordinates: [parseFloat(userLng), parseFloat(userLat)],
-    };
-    pipeline.push({
-      $geoNear: {
-        near: userPoint,
-        distanceField: "calcDistance",
-        distanceMultiplier: 0.001,
-        maxDistance: parseFloat(distance) * 1000,
-        spherical: true,
-        key: "address.location",
+  const userLat = req.query.userLat || req.query.lat;
+  const userLng = req.query.userLng || req.query.lng;
+
+  const baseFilter = { role: "berber" };
+
+  const hasFilters =
+    Boolean(search) ||
+    Boolean(languagesRaw) ||
+    Boolean(paymentsRaw) ||
+    openNow ||
+    Boolean(userLat && userLng) ||
+    "distance" in req.query ||
+    "sortBy" in req.query;
+
+  if (!hasFilters) {
+    const berbers = await User.find(baseFilter).limit(20).lean();
+
+    const berberIds = berbers.map((b) => b._id);
+    const avgRatings = await Review.aggregate([
+      { $match: { berber: { $in: berberIds } } },
+      { $group: { _id: "$berber", avgRating: { $avg: "$rating" } } },
+      {
+        $project: {
+          _id: 0,
+          berber: "$_id",
+          avgRating: { $round: ["$avgRating", 1] },
+        },
       },
+    ]);
+
+    const ratingMap = new Map(
+      avgRatings.map((r) => [r.berber.toString(), r.avgRating])
+    );
+    const results = berbers.map((b) => ({
+      ...b,
+      avgRating: ratingMap.get(b._id.toString()) || 0,
+      distance: null,
+    }));
+
+    return sendResponse(res, {
+      statusCode: httpStatus.OK,
+      success: true,
+      message: "All berbers fetched",
+      data: results,
     });
   }
 
-  // Text search
+  const pipeline = [];
+  const useGeo = Boolean(userLat && userLng);
+
+  if (useGeo) {
+    pipeline.push({
+      $geoNear: {
+        near: {
+          type: "Point",
+          coordinates: [parseFloat(userLng), parseFloat(userLat)],
+        },
+        distanceField: "calcDistance",
+        distanceMultiplier: 0.001,
+        maxDistance: Number.isFinite(distanceKm) ? distanceKm * 1000 : 50000,
+        spherical: true,
+        key: "address.location",
+        query: baseFilter,
+      },
+    });
+  } else {
+    pipeline.push({ $match: baseFilter });
+  }
+
   if (search) {
     pipeline.push({
       $match: {
@@ -201,65 +306,164 @@ export const searchBerbers = catchAsync(async (req, res) => {
     });
   }
 
-  // Other filters
-  if (languages) {
-    pipeline.push({ $match: { languages: { $in: languages.split(",") } } });
-  }
-  if (payments) {
-    pipeline.push({
-      $match: { acceptedPayments: { $in: payments.split(",") } },
-    });
-  }
-  if (minRating) {
-    // Will merge avgRating later
+  if (languagesRaw) {
+    const langs = languagesRaw
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
+    if (langs.length) pipeline.push({ $match: { languages: { $in: langs } } });
   }
 
-  // Open now
-  const now = new Date();
-  now.setFullYear(2025, 11, 4);
-  const currentTime = now.toTimeString().slice(0, 5);
-  const dayIndex = now.getDay();
-  const day = [
-    "sunday",
-    "monday",
-    "tuesday",
-    "wednesday",
-    "thursday",
-    "friday",
-    "saturday",
-  ][dayIndex];
-  if (openNow === "true") {
+  if (paymentsRaw) {
+    const pays = paymentsRaw
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
+    if (pays.length)
+      pipeline.push({ $match: { acceptedPayments: { $in: pays } } });
+  }
+
+  // ---- openNow filter (safe for "9:00" and "10:00") ----
+  let openNowDebug = null;
+
+  if (openNow) {
+    const { day, minutesNow, debug } = getDayAndMinutesNow(req);
+    openNowDebug = { day, minutesNow, ...debug };
+
     pipeline.push({
-      $match: {
-        openingHours: {
-          $elemMatch: {
-            day,
-            open: { $lte: currentTime },
-            close: { $gte: currentTime },
-            isClosed: { $ne: true },
+      $addFields: {
+        _todayHours: {
+          $first: {
+            $filter: {
+              input: "$openingHours",
+              as: "oh",
+              cond: { $eq: ["$$oh.day", day] },
+            },
           },
         },
       },
     });
+
+    pipeline.push({
+      $addFields: {
+        _openParts: { $split: [{ $ifNull: ["$_todayHours.open", ""] }, ":"] },
+        _closeParts: { $split: [{ $ifNull: ["$_todayHours.close", ""] }, ":"] },
+        _isClosed: { $ifNull: ["$_todayHours.isClosed", true] },
+      },
+    });
+
+    pipeline.push({
+      $addFields: {
+        _openH: {
+          $convert: {
+            input: { $arrayElemAt: ["$_openParts", 0] },
+            to: "int",
+            onError: null,
+            onNull: null,
+          },
+        },
+        _openM: {
+          $convert: {
+            input: { $arrayElemAt: ["$_openParts", 1] },
+            to: "int",
+            onError: null,
+            onNull: null,
+          },
+        },
+        _closeH: {
+          $convert: {
+            input: { $arrayElemAt: ["$_closeParts", 0] },
+            to: "int",
+            onError: null,
+            onNull: null,
+          },
+        },
+        _closeM: {
+          $convert: {
+            input: { $arrayElemAt: ["$_closeParts", 1] },
+            to: "int",
+            onError: null,
+            onNull: null,
+          },
+        },
+      },
+    });
+
+    pipeline.push({
+      $addFields: {
+        _openMin: {
+          $cond: [
+            { $and: [{ $ne: ["$_openH", null] }, { $ne: ["$_openM", null] }] },
+            { $add: [{ $multiply: ["$_openH", 60] }, "$_openM"] },
+            null,
+          ],
+        },
+        _closeMin: {
+          $cond: [
+            {
+              $and: [{ $ne: ["$_closeH", null] }, { $ne: ["$_closeM", null] }],
+            },
+            { $add: [{ $multiply: ["$_closeH", 60] }, "$_closeM"] },
+            null,
+          ],
+        },
+      },
+    });
+
+    pipeline.push({
+      $match: {
+        $expr: {
+          $and: [
+            { $ne: ["$_todayHours", null] },
+            { $ne: ["$_isClosed", true] },
+            { $ne: ["$_openMin", null] },
+            { $ne: ["$_closeMin", null] },
+            {
+              $cond: [
+                { $gte: ["$_closeMin", "$_openMin"] },
+                {
+                  $and: [
+                    { $lte: ["$_openMin", minutesNow] },
+                    { $gte: ["$_closeMin", minutesNow] },
+                  ],
+                },
+                {
+                  $or: [
+                    { $gte: [minutesNow, "$_openMin"] },
+                    { $lte: [minutesNow, "$_closeMin"] },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+      },
+    });
+
+    pipeline.push({
+      $project: {
+        _todayHours: 0,
+        _openParts: 0,
+        _closeParts: 0,
+        _openH: 0,
+        _openM: 0,
+        _closeH: 0,
+        _closeM: 0,
+        _openMin: 0,
+        _closeMin: 0,
+        _isClosed: 0,
+      },
+    });
   }
 
-  // Base match after geo
-  pipeline.unshift({ $match: baseFilter });
+  const sortStage = {};
+  if (sortBy === "distance" && useGeo) sortStage.calcDistance = 1;
+  else sortStage.createdAt = -1;
 
-  // Sort
-  let sortStage = {};
-  if (sortBy === "distance" && useGeo) {
-    sortStage.calcDistance = 1;
-  } else if (sortBy === "rating") {
-    sortStage.avgRating = 1;
-  }
-  pipeline.push({ $sort: sortStage });
-
-  pipeline.push({ $limit: 20 });
+  pipeline.push({ $sort: sortStage }, { $limit: 20 });
 
   const berbers = await User.aggregate(pipeline);
 
-  // Merge avgRating from Reviews
   const berberIds = berbers.map((b) => b._id);
   const avgRatings = await Review.aggregate([
     { $match: { berber: { $in: berberIds } } },
@@ -272,24 +476,27 @@ export const searchBerbers = catchAsync(async (req, res) => {
       },
     },
   ]);
+
   const ratingMap = new Map(
     avgRatings.map((r) => [r.berber.toString(), r.avgRating])
   );
 
-  // Final results with distance (if geo) and rating
   const results = berbers.map((b) => ({
     ...b,
     avgRating: ratingMap.get(b._id.toString()) || 0,
     distance: useGeo ? Math.round(b.calcDistance) : null,
   }));
 
-  sendResponse(res, {
+  return sendResponse(res, {
     statusCode: httpStatus.OK,
     success: true,
     message: "Berbers fetched",
     data: results,
+    // optional debug so you can see what's happening (remove later)
+    debug: openNow ? { openNowDebug } : undefined,
   });
 });
+
 // Reservations
 export const createReservation = catchAsync(async (req, res) => {
   const { berberId, serviceName, date, time } = req.body;

@@ -1,6 +1,7 @@
 import express from "express";
 import {
   setupBerberProfile,
+  updateBerberProfile,
   createCampaign,
   getMyCampaigns,
   getCampaignStats,
@@ -22,6 +23,14 @@ router.post(
     { name: "portfolioImages", maxCount: 10 },
   ]),
   setupBerberProfile
+);
+router.put(
+  "/profile/update",
+  upload.fields([
+    { name: "shopLogo", maxCount: 1 },
+    { name: "portfolioImages", maxCount: 10 },
+  ]),
+  updateBerberProfile
 );
 
 // campaigns and contests routes

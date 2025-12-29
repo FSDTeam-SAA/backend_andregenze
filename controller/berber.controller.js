@@ -22,7 +22,6 @@ export const setupBerberProfile = catchAsync(async (req, res) => {
     throw new AppError(httpStatus.BAD_REQUEST, "Profile already set up");
   }
 
-  // ✅ Parse JSON fields
   const parseIfJson = (v) => {
     if (typeof v !== "string") return v;
     try {
@@ -61,7 +60,6 @@ export const setupBerberProfile = catchAsync(async (req, res) => {
     address,
   } = req.body;
 
-  // ✅ Validations
   if (!Array.isArray(services) || services.length === 0) {
     throw new AppError(
       httpStatus.BAD_REQUEST,
@@ -83,12 +81,10 @@ export const setupBerberProfile = catchAsync(async (req, res) => {
     );
   }
 
-  // ✅ Initialize user.address if it doesn't exist
   if (!user.address) {
     user.address = {};
   }
 
-  // ✅ Assign fields
   user.shopDescription = shopDescription || "";
 
   user.socialMedia =
@@ -106,13 +102,11 @@ export const setupBerberProfile = catchAsync(async (req, res) => {
     ? acceptedPayments
     : [];
 
-  // ✅ Address handling
   if (address && typeof address === "object" && !Array.isArray(address)) {
-    const { location, ...safeAddress } = address; // ✅ drop location completely
+    const { location, ...safeAddress } = address;
     Object.assign(user.address, safeAddress);
   }
 
-  // ✅ Handle geo location
   const latNum = Number(lat);
   const lngNum = Number(lng);
 
@@ -122,11 +116,9 @@ export const setupBerberProfile = catchAsync(async (req, res) => {
       coordinates: [lngNum, latNum],
     };
   } else {
-    // ✅ If no valid lat/lng, remove location field entirely
     user.address.location = null;
   }
 
-  // ✅ Upload shop logo
   if (!req.files?.shopLogo?.[0]) {
     throw new AppError(httpStatus.BAD_REQUEST, "Shop logo required");
   }
@@ -137,7 +129,6 @@ export const setupBerberProfile = catchAsync(async (req, res) => {
     url: logoUpload.secure_url,
   };
 
-  // ✅ Portfolio images
   const descArr = Array.isArray(portfolioDescriptions)
     ? portfolioDescriptions
     : [];
@@ -159,7 +150,6 @@ export const setupBerberProfile = catchAsync(async (req, res) => {
 
   user.portfolioImages = portfolioImages;
 
-  // ✅ Ensure address exists before saving
   if (!user.address) {
     user.address = {};
   }
@@ -170,6 +160,124 @@ export const setupBerberProfile = catchAsync(async (req, res) => {
     statusCode: httpStatus.CREATED,
     success: true,
     message: "Berber profile set up successfully",
+    data: user.toObject(),
+  });
+});
+
+export const updateBerberProfile = catchAsync(async (req, res) => {
+  const user = await User.findById(req.user._id);
+  if (!user) throw new AppError(httpStatus.NOT_FOUND, "User not found");
+
+  if (user.role !== "berber") {
+    throw new AppError(httpStatus.FORBIDDEN, "Berber update only");
+  }
+
+  const parseIfJson = (v) => {
+    if (typeof v !== "string") return v;
+    try {
+      return JSON.parse(v);
+    } catch {
+      return v;
+    }
+  };
+
+  const jsonFields = [
+    "socialMedia",
+    "staffMembers",
+    "openingHours",
+    "services",
+    "languages",
+    "acceptedPayments",
+    "portfolioDescriptions",
+    "address",
+  ];
+
+  jsonFields.forEach((k) => {
+    if (req.body?.[k] != null) req.body[k] = parseIfJson(req.body[k]);
+  });
+
+  const {
+    shopDescription,
+    socialMedia,
+    staffMembers,
+    openingHours,
+    services,
+    languages,
+    acceptedPayments,
+    portfolioDescriptions,
+    lat,
+    lng,
+    address,
+  } = req.body;
+
+  if (shopDescription !== undefined) user.shopDescription = shopDescription;
+
+  if (
+    socialMedia &&
+    typeof socialMedia === "object" &&
+    !Array.isArray(socialMedia)
+  )
+    user.socialMedia = socialMedia;
+
+  if (Array.isArray(staffMembers)) user.staffMembers = staffMembers;
+
+  if (Array.isArray(openingHours)) user.openingHours = openingHours;
+
+  if (Array.isArray(services)) user.services = services;
+
+  if (Array.isArray(languages)) user.languages = languages;
+
+  if (Array.isArray(acceptedPayments)) user.acceptedPayments = acceptedPayments;
+
+  if (!user.address) user.address = {};
+
+  if (address && typeof address === "object" && !Array.isArray(address)) {
+    const { location, ...safeAddress } = address;
+    Object.assign(user.address, safeAddress);
+  }
+
+  const latNum = Number(lat);
+  const lngNum = Number(lng);
+
+  if (Number.isFinite(latNum) && Number.isFinite(lngNum)) {
+    user.address.location = {
+      type: "Point",
+      coordinates: [lngNum, latNum],
+    };
+  }
+
+  if (req.files?.shopLogo?.[0]) {
+    const logoUpload = await uploadOnCloudinary(req.files.shopLogo[0].buffer);
+    user.shopLogo = {
+      public_id: logoUpload.public_id,
+      url: logoUpload.secure_url,
+    };
+  }
+
+  if (req.files?.portfolioImages?.length) {
+    const descArr = Array.isArray(portfolioDescriptions)
+      ? portfolioDescriptions
+      : [];
+
+    const uploads = await Promise.all(
+      req.files.portfolioImages
+        .slice(0, 10)
+        .map((file) => uploadOnCloudinary(file.buffer))
+    );
+
+    user.portfolioImages = uploads.map((upload, i) => ({
+      public_id: upload.public_id,
+      url: upload.secure_url,
+      description: descArr[i] || "",
+    }));
+  }
+
+  await user.save();
+
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: "Berber profile updated successfully",
     data: user.toObject(),
   });
 });
