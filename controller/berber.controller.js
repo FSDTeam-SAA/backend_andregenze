@@ -342,6 +342,27 @@ export const createCampaign = catchAsync(async (req, res) => {
   });
 });
 
+export const updateCampaign = catchAsync(async (req, res) => {
+  const { id } = req.params;
+  const campaign = await Campaign.findOne({ _id: id, berber: req.user._id });
+  if (!campaign) throw new AppError(httpStatus.NOT_FOUND, "Campaign not found");
+
+  const { name, discount, type, startDate, endDate } = req.body;
+  campaign.name = name;
+  campaign.discount = discount;
+  campaign.type = type;
+  campaign.startDate = new Date(startDate);
+  campaign.endDate = new Date(endDate);
+  await campaign.save();
+
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: "Campaign updated",
+    data: campaign,
+  });
+});
+
 export const getMyCampaigns = catchAsync(async (req, res) => {
   const campaigns = await Campaign.find({ berber: req.user._id })
     .populate("members", "name avatar")
@@ -414,24 +435,35 @@ export const getCurrentContest = catchAsync(async (req, res) => {
 });
 
 export const getHallOfFame = catchAsync(async (req, res) => {
-  const { type } = req.query; // "current" or "previous"
-  let contests;
-  if (type === "previous") {
-    contests = await Contest.find({ isActive: false }).populate(
-      "winners",
-      "photo votes submittedAt user"
-    );
-  } else {
-    contests = await Contest.find({ isActive: true }).populate(
-      "participants",
-      "photo votes submittedAt user"
-    );
-  }
+  const { type } = req.query;
+  const now = new Date();
+
+  let filter = {};
+  if (type === "previous") filter = { endDate: { $lt: now } };
+  else if (type === "current")
+    filter = { startDate: { $lte: now }, endDate: { $gte: now } };
+  else filter = { endDate: { $lt: now } };
+
+  const contests = await Contest.find(filter)
+    .select("title startDate endDate isActive")
+    .sort({ startDate: -1 });
+
+  const data = await Promise.all(
+    contests.map(async (contest) => {
+      const winner = await Participation.findOne({ contest: contest._id })
+        .sort({ votes: -1, submittedAt: 1 })
+        .populate("user", "name avatar")
+        .select("photo votes submittedAt description frame user");
+
+      return { contest, winner: winner || null };
+    })
+  );
+
   sendResponse(res, {
     statusCode: httpStatus.OK,
     success: true,
     message: "Hall of Fame fetched",
-    data: contests,
+    data,
   });
 });
 
@@ -511,7 +543,11 @@ export const deleteParticipation = catchAsync(async (req, res) => {
     throw new AppError(httpStatus.NOT_FOUND, "No participation");
 
   // Reset votes
-  await Vote.deleteMany({ participation: participation._id });
+  await Contest.updateOne(
+    { _id: participation.contest },
+    { $pull: { participants: participation._id } }
+  );
+  await participation.deleteOne();
 
   await participation.deleteOne();
   sendResponse(res, {

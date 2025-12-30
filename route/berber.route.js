@@ -3,6 +3,7 @@ import {
   setupBerberProfile,
   updateBerberProfile,
   createCampaign,
+  updateCampaign,
   getMyCampaigns,
   getCampaignStats,
   getMyReservationsAsBerber,
@@ -35,6 +36,7 @@ router.put(
 
 // campaigns and contests routes
 router.post("/campaigns", createCampaign);
+router.put("/campaigns/:id", updateCampaign);
 router.get("/campaigns", getMyCampaigns);
 router.get("/campaigns/:id/stats", getCampaignStats);
 
