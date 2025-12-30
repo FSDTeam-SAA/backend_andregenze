@@ -438,24 +438,59 @@ export const getHallOfFame = catchAsync(async (req, res) => {
   const { type } = req.query;
   const now = new Date();
 
-  let filter = {};
-  if (type === "previous") filter = { endDate: { $lt: now } };
-  else if (type === "current")
-    filter = { startDate: { $lte: now }, endDate: { $gte: now } };
-  else filter = { endDate: { $lt: now } };
+  const contestSelect = "_id title startDate endDate";
 
-  const contests = await Contest.find(filter)
-    .select("title startDate endDate isActive")
-    .sort({ startDate: -1 });
+  // ---------- CURRENT ----------
+  if (type === "current") {
+    const contests = await Contest.find({
+      startDate: { $lte: now },
+      endDate: { $gte: now },
+    })
+      .sort({ startDate: -1 })
+      .select(contestSelect)
+      .lean();
+
+    const data = await Promise.all(
+      contests.map(async (contest) => {
+        const participants = await Participation.find({ contest: contest._id })
+          .sort({ votes: -1, submittedAt: 1 })
+          .populate("user", "name avatar")
+          .select("photo votes submittedAt description frame user")
+          .lean();
+
+        return {
+          contest,
+          participants,
+        };
+      })
+    );
+
+    return sendResponse(res, {
+      statusCode: httpStatus.OK,
+      success: true,
+      message: "Hall of Fame fetched",
+      data,
+    });
+  }
+
+  // ---------- PREVIOUS ----------
+  const contests = await Contest.find({ endDate: { $lt: now } })
+    .sort({ startDate: -1 })
+    .select(contestSelect)
+    .lean();
 
   const data = await Promise.all(
     contests.map(async (contest) => {
       const winner = await Participation.findOne({ contest: contest._id })
         .sort({ votes: -1, submittedAt: 1 })
         .populate("user", "name avatar")
-        .select("photo votes submittedAt description frame user");
+        .select("photo votes submittedAt description frame user") // includes votes ✅
+        .lean();
 
-      return { contest, winner: winner || null };
+      return {
+        contest,
+        winner: winner || null,
+      };
     })
   );
 
