@@ -321,18 +321,22 @@ export const confirmReservation = catchAsync(async (req, res) => {
 export const createCampaign = catchAsync(async (req, res) => {
   const { name, discount, type, startDate, endDate } = req.body;
 
-  const date = new Date();
-
   const user = await User.findById(req.user._id);
   if (user.role !== "berber")
     throw new AppError(httpStatus.FORBIDDEN, "Berber only");
 
   const activeCampaign = await Campaign.findOne({
     berber: req.user._id,
-    endDate: { $lte: date },
+    $or: [
+      {
+        startDate: { $lte: new Date(endDate) },
+        endDate: { $gte: new Date(startDate) },
+      },
+    ],
   });
+
   if (activeCampaign)
-    throw new AppError(httpStatus.BAD_REQUEST, "Already an active campaign");
+    throw new AppError(httpStatus.BAD_REQUEST, "Already running a campaign");
 
   const campaign = await Campaign.create({
     berber: req.user._id,
