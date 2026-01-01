@@ -47,6 +47,7 @@ export const setupBerberProfile = catchAsync(async (req, res) => {
   });
 
   const {
+    shopName,
     shopDescription,
     socialMedia,
     staffMembers,
@@ -94,6 +95,7 @@ export const setupBerberProfile = catchAsync(async (req, res) => {
       ? socialMedia
       : {};
 
+  user.shopName = shopName || "";
   user.staffMembers = Array.isArray(staffMembers) ? staffMembers : [];
   user.openingHours = openingHours;
   user.services = services;
@@ -197,6 +199,7 @@ export const updateBerberProfile = catchAsync(async (req, res) => {
   });
 
   const {
+    shopName,
     shopDescription,
     socialMedia,
     staffMembers,
@@ -219,6 +222,8 @@ export const updateBerberProfile = catchAsync(async (req, res) => {
     !Array.isArray(socialMedia)
   )
     user.socialMedia = socialMedia;
+
+  if (Array.isArray(shopName)) user.shopName = shopName;
 
   if (Array.isArray(staffMembers)) user.staffMembers = staffMembers;
 
