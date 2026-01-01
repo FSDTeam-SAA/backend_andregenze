@@ -286,14 +286,37 @@ export const updateBerberProfile = catchAsync(async (req, res) => {
 });
 
 export const getMyReservationsAsBerber = catchAsync(async (req, res) => {
-  const reservations = await Reservation.find({ berber: req.user._id })
+  const { date } = req.query;
+
+  // If date not provided
+  if (!date) {
+    return res.status(400).json({
+      success: false,
+      message: "Date is required (YYYY-MM-DD)",
+    });
+  }
+
+  // Create date range
+  const startDate = new Date(date);
+  startDate.setHours(0, 0, 0, 0);
+
+  const endDate = new Date(date);
+  endDate.setHours(23, 59, 59, 999);
+
+  const reservations = await Reservation.find({
+    berber: req.user._id,
+    date: {
+      $gte: startDate,
+      $lte: endDate,
+    },
+  })
     .populate("user", "name phone avatar")
     .sort({ date: 1 });
 
   sendResponse(res, {
     statusCode: httpStatus.OK,
     success: true,
-    message: "Incoming reservations fetched",
+    message: "Reservations fetched by date",
     data: reservations,
   });
 });
