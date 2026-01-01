@@ -208,6 +208,7 @@ export const updateBerberProfile = catchAsync(async (req, res) => {
     lat,
     lng,
     address,
+    phone,
   } = req.body;
 
   if (shopDescription !== undefined) user.shopDescription = shopDescription;
@@ -220,6 +221,8 @@ export const updateBerberProfile = catchAsync(async (req, res) => {
     user.socialMedia = socialMedia;
 
   if (Array.isArray(staffMembers)) user.staffMembers = staffMembers;
+
+  if (Array.isArray(phone)) user.phone = phone;
 
   if (Array.isArray(openingHours)) user.openingHours = openingHours;
 
