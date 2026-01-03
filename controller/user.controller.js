@@ -196,6 +196,7 @@ export const updateSettings = catchAsync(async (req, res) => {
     emailNewsUpdates,
     emailBirthdayGifts,
     dataPrivacyConsent,
+    status,
   } = req.body;
   const user = await User.findById(req.user._id);
 
@@ -206,6 +207,7 @@ export const updateSettings = catchAsync(async (req, res) => {
     user.emailBirthdayGifts = emailBirthdayGifts;
   if (dataPrivacyConsent !== undefined)
     user.dataPrivacyConsent = dataPrivacyConsent;
+  if (status !== undefined) user.status = status;
 
   await user.save();
   sendResponse(res, {

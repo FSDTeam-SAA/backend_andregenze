@@ -675,3 +675,73 @@ export const voteForParticipation = catchAsync(async (req, res) => {
     data: { voted: true },
   });
 });
+
+export const deleteContestParticipation = catchAsync(async (req, res) => {
+  const { contestId, participationId } = req.params;
+  const now = new Date();
+
+  const contest = await Contest.findById(contestId);
+
+  if (!contest) {
+    return sendResponse(res, {
+      statusCode: httpStatus.NOT_FOUND,
+      success: false,
+      message: "Contest not found",
+    });
+  }
+
+  const participation = await Participation.findOne({
+    _id: participationId,
+    contest: contestId,
+  });
+
+  if (!participation) {
+    return sendResponse(res, {
+      statusCode: httpStatus.NOT_FOUND,
+      success: false,
+      message: "Participation not found",
+    });
+  }
+
+  // CURRENT CONTEST
+  if (contest.startDate <= now && contest.endDate >= now) {
+    await participation.deleteOne();
+
+    return sendResponse(res, {
+      statusCode: httpStatus.OK,
+      success: true,
+      message: "Participant deleted from current contest",
+    });
+  }
+
+  // PREVIOUS CONTEST
+  if (contest.endDate < now) {
+    const winner = await Participation.findOne({ contest: contestId }).sort({
+      votes: -1,
+      submittedAt: 1,
+    });
+
+    if (!winner || winner._id.toString() !== participationId) {
+      return sendResponse(res, {
+        statusCode: httpStatus.BAD_REQUEST,
+        success: false,
+        message: "Only the winner can be deleted from previous contests",
+      });
+    }
+
+    await participation.deleteOne();
+
+    return sendResponse(res, {
+      statusCode: httpStatus.OK,
+      success: true,
+      message: "Winner deleted from previous contest",
+    });
+  }
+
+  // UPCOMING CONTEST
+  return sendResponse(res, {
+    statusCode: httpStatus.BAD_REQUEST,
+    success: false,
+    message: "Cannot delete participation from upcoming contest",
+  });
+});

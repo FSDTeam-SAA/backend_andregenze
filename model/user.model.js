@@ -57,6 +57,11 @@ const userSchema = new Schema(
       tiktok: { type: String },
     },
     staffMembers: [{ type: String }],
+    status: {
+      type: String,
+      enum: ["active", "inactive", "blocked", "deleted"],
+      default: "active",
+    },
     openingHours: [
       {
         day: {

@@ -3,6 +3,7 @@ import { Contest } from "../model/contest.model.js";
 import AppError from "../errors/AppError.js";
 import sendResponse from "../utils/sendResponse.js";
 import catchAsync from "../utils/catchAsync.js";
+import { User } from "../model/user.model.js";
 
 export const createContest = catchAsync(async (req, res) => {
   const { startDate, endDate, title, description } = req.body;
@@ -104,5 +105,63 @@ export const updateContest = catchAsync(async (req, res) => {
     statusCode: httpStatus.OK,
     success: true,
     message: "Contest updated",
+  });
+});
+
+export const deleteContest = catchAsync(async (req, res) => {
+  const { id } = req.params;
+  const contest = await Contest.findOne({ _id: id });
+  if (!contest) throw new AppError(httpStatus.NOT_FOUND, "Contest not found");
+
+  // Deactivate previous if active
+  await Contest.updateMany({ isActive: true }, { isActive: false });
+
+  await Contest.deleteOne({ _id: id });
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: "Contest deleted",
+  });
+});
+
+export const allUsersAndBerbers = catchAsync(async (req, res) => {
+  const { role } = req.query;
+  const filter = {};
+  if (role) filter.role = role;
+
+  const users = await User.find(filter);
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: "Users fetched",
+    data: users,
+  });
+});
+
+export const updateUserStatus = catchAsync(async (req, res) => {
+  const { userId } = req.params;
+  const { status } = req.body;
+  const user = await User.findOne({ _id: userId });
+  if (!user) throw new AppError(httpStatus.NOT_FOUND, "User not found");
+
+  await User.updateOne({ _id: userId }, { status });
+
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: "User status updated",
+  });
+});
+
+export const deleteUser = catchAsync(async (req, res) => {
+  const { userId } = req.params;
+  const user = await User.findOne({ _id: userId });
+  if (!user) throw new AppError(httpStatus.NOT_FOUND, "User not found");
+
+  await User.deleteOne({ _id: userId });
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: "User deleted",
   });
 });
