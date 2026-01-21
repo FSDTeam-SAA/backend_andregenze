@@ -53,3 +53,20 @@ export const deleteContactUsById = catchAsync(async (req, res) => {
     data: contactUs,
   });
 });
+
+export const createWebContactUs = catchAsync(async (req, res) => {
+  const { name, lastName, phone, email, message } = req.body;
+  const contactUs = await ContactUs.create({
+    name,
+    lastName,
+    phone,
+    email,
+    message,
+  });
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: "Contact us created",
+    data: contactUs,
+  });
+});

@@ -13,6 +13,7 @@ import {
   getMyReservations,
   addReview,
   getReviews,
+  getAllBerbersWeb,
 } from "../controller/user.controller.js";
 import { protect } from "../middleware/auth.middleware.js";
 import upload from "../middleware/multer.middleware.js";
@@ -20,6 +21,7 @@ import upload from "../middleware/multer.middleware.js";
 const router = express.Router();
 
 router.get("/profile", protect, getProfile);
+router.get("/berbers-web", getAllBerbersWeb);
 router.put(
   "/profile",
   protect,
@@ -28,7 +30,7 @@ router.put(
     { name: "shopLogo", maxCount: 1 },
     { name: "portfolioImages", maxCount: 10 },
   ]),
-  updateProfile
+  updateProfile,
 );
 router.put("/password", protect, changePassword);
 router.delete("/account", protect, deleteAccount);

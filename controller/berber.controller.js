@@ -64,21 +64,21 @@ export const setupBerberProfile = catchAsync(async (req, res) => {
   if (!Array.isArray(services) || services.length === 0) {
     throw new AppError(
       httpStatus.BAD_REQUEST,
-      "Required field missing: services"
+      "Required field missing: services",
     );
   }
 
   if (!Array.isArray(openingHours) || openingHours.length === 0) {
     throw new AppError(
       httpStatus.BAD_REQUEST,
-      "Required field missing: openingHours"
+      "Required field missing: openingHours",
     );
   }
 
   if (!Array.isArray(languages) || languages.length === 0) {
     throw new AppError(
       httpStatus.BAD_REQUEST,
-      "Required field missing: languages"
+      "Required field missing: languages",
     );
   }
 
@@ -140,7 +140,7 @@ export const setupBerberProfile = catchAsync(async (req, res) => {
     const uploads = await Promise.all(
       req.files.portfolioImages
         .slice(0, 10)
-        .map((file) => uploadOnCloudinary(file.buffer))
+        .map((file) => uploadOnCloudinary(file.buffer)),
     );
 
     portfolioImages = uploads.map((upload, i) => ({
@@ -270,7 +270,7 @@ export const updateBerberProfile = catchAsync(async (req, res) => {
     const uploads = await Promise.all(
       req.files.portfolioImages
         .slice(0, 10)
-        .map((file) => uploadOnCloudinary(file.buffer))
+        .map((file) => uploadOnCloudinary(file.buffer)),
     );
 
     user.portfolioImages = uploads.map((upload, i) => ({
@@ -428,7 +428,7 @@ export const getCampaignStats = catchAsync(async (req, res) => {
     Math.round(
       (campaign.stats.stampsPerMonth.reduce((sum, m) => sum + m.count, 0) /
         (campaign.totalStamps * campaign.currentMembers)) *
-        100
+        100,
     ) || 0;
   campaign.stats.currentMembers = campaign.members.length;
 
@@ -505,7 +505,7 @@ export const getHallOfFame = catchAsync(async (req, res) => {
           contest,
           participants,
         };
-      })
+      }),
     );
 
     return sendResponse(res, {
@@ -534,7 +534,7 @@ export const getHallOfFame = catchAsync(async (req, res) => {
         contest,
         winner: winner || null,
       };
-    })
+    }),
   );
 
   sendResponse(res, {
@@ -623,7 +623,7 @@ export const deleteParticipation = catchAsync(async (req, res) => {
   // Reset votes
   await Contest.updateOne(
     { _id: participation.contest },
-    { $pull: { participants: participation._id } }
+    { $pull: { participants: participation._id } },
   );
   await participation.deleteOne();
 
@@ -743,5 +743,84 @@ export const deleteContestParticipation = catchAsync(async (req, res) => {
     statusCode: httpStatus.BAD_REQUEST,
     success: false,
     message: "Cannot delete participation from upcoming contest",
+  });
+});
+
+export const getHallOfFameWeb = catchAsync(async (req, res) => {
+  const { type = "current" } = req.query;
+  const now = new Date();
+
+  const contestSelect = "title startDate endDate";
+
+  // ================= CURRENT =================
+  if (type === "current") {
+    const contests = await Contest.find({
+      startDate: { $lte: now },
+      endDate: { $gte: now },
+    })
+      .select(contestSelect)
+      .populate({
+        path: "participants",
+        options: { sort: { votes: -1, submittedAt: 1 } },
+        select: "photo votes submittedAt description frame",
+        populate: {
+          path: "user",
+          select: "name avatar",
+        },
+      })
+      .sort({ startDate: -1 })
+      .lean();
+
+    // 🔥 SHAPE FIX (THIS IS THE KEY PART)
+    const data = contests.map((contest) => ({
+      contest: {
+        _id: contest._id,
+        title: contest.title,
+        startDate: contest.startDate,
+        endDate: contest.endDate,
+      },
+      participants: contest.participants || [],
+    }));
+
+    return sendResponse(res, {
+      statusCode: httpStatus.OK,
+      success: true,
+      message: "Hall of Fame fetched",
+      data,
+    });
+  }
+
+  // ================= PREVIOUS =================
+  const contests = await Contest.find({
+    endDate: { $lt: now },
+  })
+    .select(contestSelect)
+    .populate({
+      path: "winners",
+      options: { sort: { votes: -1, submittedAt: 1 }, limit: 1 },
+      select: "photo votes submittedAt description frame",
+      populate: {
+        path: "user",
+        select: "name avatar",
+      },
+    })
+    .sort({ startDate: -1 })
+    .lean();
+
+  const data = contests.map((contest) => ({
+    contest: {
+      _id: contest._id,
+      title: contest.title,
+      startDate: contest.startDate,
+      endDate: contest.endDate,
+    },
+    winner: contest.winners?.[0] || null,
+  }));
+
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: "Hall of Fame fetched",
+    data,
   });
 });

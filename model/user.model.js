@@ -135,7 +135,7 @@ const userSchema = new Schema(
     resetPasswordOTPExpiry: { type: Date },
     deleteReason: { type: String },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
 userSchema.pre("save", async function (next) {
@@ -176,7 +176,7 @@ userSchema.statics.isOTPVerified = async function (id) {
 
 userSchema.statics.isPasswordMatched = async function (
   plainTextPassword,
-  hashPassword
+  hashPassword,
 ) {
   return await bcrypt.compare(plainTextPassword, hashPassword);
 };
@@ -188,7 +188,7 @@ userSchema.index(
     partialFilterExpression: {
       "address.location.coordinates": { $exists: true },
     },
-  }
+  },
 );
 
 export const User = mongoose.model("User", userSchema);

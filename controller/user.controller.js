@@ -51,7 +51,7 @@ const getDayAndMinutesNow = (req) => {
     const hh = parseInt(parts.find((p) => p.type === "hour")?.value ?? "0", 10);
     const mm = parseInt(
       parts.find((p) => p.type === "minute")?.value ?? "0",
-      10
+      10,
     );
 
     return { day, minutesNow: hh * 60 + mm, debug: { tzUsed: tz } };
@@ -77,7 +77,7 @@ const getDayAndMinutesNow = (req) => {
 
 export const getProfile = catchAsync(async (req, res) => {
   const user = await User.findById(req.user._id).select(
-    "-password -refreshToken -verificationInfo -password_reset_token"
+    "-password -refreshToken -verificationInfo -password_reset_token",
   );
   sendResponse(res, {
     statusCode: httpStatus.OK,
@@ -127,7 +127,7 @@ export const updateProfile = catchAsync(async (req, res) => {
     const uploads = await Promise.all(
       req.files.portfolioImages
         .slice(0, 10)
-        .map((file) => uploadOnCloudinary(file.buffer))
+        .map((file) => uploadOnCloudinary(file.buffer)),
     );
     const newImages = uploads.map((upload, i) => ({
       public_id: upload.public_id,
@@ -259,7 +259,7 @@ export const searchBerbers = catchAsync(async (req, res) => {
     ]);
 
     const ratingMap = new Map(
-      avgRatings.map((r) => [r.berber.toString(), r.avgRating])
+      avgRatings.map((r) => [r.berber.toString(), r.avgRating]),
     );
     const results = berbers.map((b) => ({
       ...b,
@@ -480,7 +480,7 @@ export const searchBerbers = catchAsync(async (req, res) => {
   ]);
 
   const ratingMap = new Map(
-    avgRatings.map((r) => [r.berber.toString(), r.avgRating])
+    avgRatings.map((r) => [r.berber.toString(), r.avgRating]),
   );
 
   const results = berbers.map((b) => ({
@@ -581,7 +581,7 @@ export const deleteReservation = catchAsync(async (req, res) => {
   const reservation = await Reservation.findOneAndUpdate(
     { _id: id, user: req.user._id },
     { status: "cancelled" },
-    { new: true }
+    { new: true },
   );
   if (!reservation)
     throw new AppError(httpStatus.NOT_FOUND, "Reservation not found");
@@ -689,5 +689,44 @@ export const getCurrentContest = catchAsync(async (req, res) => {
       contest,
       myParticipation,
     },
+  });
+});
+
+export const getAllBerbersWeb = catchAsync(async (req, res) => {
+  const berbers = await User.find({ role: "berber" })
+    .select(
+      "shopName avatar languages acceptedPayments address.location address.city portfolioImages",
+    )
+    .limit(20)
+    .lean();
+
+  const berberIds = berbers.map((b) => b._id);
+  const avgRatings = await Review.aggregate([
+    { $match: { berber: { $in: berberIds } } },
+    { $group: { _id: "$berber", avgRating: { $avg: "$rating" } } },
+    {
+      $project: {
+        _id: 0,
+        berber: "$_id",
+        avgRating: { $round: ["$avgRating", 1] },
+      },
+    },
+  ]);
+
+  const ratingMap = new Map(
+    avgRatings.map((r) => [r.berber.toString(), r.avgRating]),
+  );
+
+  const results = berbers.map((b) => ({
+    ...b,
+    avgRating: ratingMap.get(b._id.toString()) || 0,
+    distance: null,
+  }));
+
+  return sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: "All berbers fetched",
+    data: results,
   });
 });
