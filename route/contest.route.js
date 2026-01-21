@@ -14,14 +14,22 @@ import upload from "../middleware/multer.middleware.js";
 
 const router = express.Router();
 
-router.use(protect);
-
-router.get("/current", getCurrentContest);
+router.get("/current", protect, getCurrentContest);
 router.get("/web-current", getHallOfFameWeb);
-router.get("/hall-of-fame", getHallOfFame);
-router.post("/participate", upload.single("photo"), participateInContest);
-router.put("/participate", upload.single("photo"), updateParticipation);
-router.delete("/participate", deleteParticipation);
-router.post("/:participationId/vote", voteForParticipation);
+router.get("/hall-of-fame", protect, getHallOfFame);
+router.post(
+  "/participate",
+  protect,
+  upload.single("photo"),
+  participateInContest,
+);
+router.put(
+  "/participate",
+  protect,
+  upload.single("photo"),
+  updateParticipation,
+);
+router.delete("/participate", protect, deleteParticipation);
+router.post("/:participationId/vote", protect, voteForParticipation);
 
 export default router;
