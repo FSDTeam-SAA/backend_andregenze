@@ -55,6 +55,7 @@ const userSchema = new Schema(
       facebook: { type: String },
       instagram: { type: String },
       tiktok: { type: String },
+      web: { type: String },
     },
     staffMembers: [{ type: String }],
     status: {
