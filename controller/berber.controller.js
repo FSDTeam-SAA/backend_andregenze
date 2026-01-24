@@ -824,3 +824,45 @@ export const getHallOfFameWeb = catchAsync(async (req, res) => {
     data,
   });
 });
+
+export const addStuff = catchAsync(async (req, res) => {
+  const {userIds} = req.body;
+  const user = await User.findById(req.user._id);
+  if (user.role !== "berber") {
+    throw new AppError(httpStatus.FORBIDDEN, "Berber only");
+  }
+  const staffMembers = user.staffMembers || [];
+  userIds.forEach((id) => {
+    if (!staffMembers.includes(id)) {
+      staffMembers.push(id);
+    }
+  });
+  user.staffMembers = staffMembers;
+  await user.save();
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: "Staff members added successfully",
+    data: user.staffMembers,
+  });
+})
+
+export const deleteStuff = catchAsync(async (req, res) => {
+  const {userId} = req.body;
+  const user = await User.findById(req.user._id);
+  if (user.role !== "berber") {
+    throw new AppError(httpStatus.FORBIDDEN, "Berber only");
+  }
+  const staffMembers = user.staffMembers || [];
+  if (staffMembers.includes(userId)) {
+    staffMembers.splice(staffMembers.indexOf(userId), 1);
+  }
+  user.staffMembers = staffMembers;
+  await user.save();
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: "Staff members delete successfully",
+    data: user.staffMembers,
+  });
+})

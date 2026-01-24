@@ -730,3 +730,197 @@ export const getAllBerbersWeb = catchAsync(async (req, res) => {
     data: results,
   });
 });
+
+export const allUser = catchAsync(async (req, res) => {
+  const users = await User.find({role: "user"}).select("-password -refreshToken -verificationInfo -password_reset_token");
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: "All users fetched",
+    data: users,
+  });
+});
+
+
+export const getAdminDashboard = catchAsync(async (req, res) => {
+  // year selector like your UI
+  const year = Number(req.query.year) || new Date().getFullYear();
+  if (!Number.isFinite(year) || year < 1970 || year > 3000) {
+    throw new AppError("Invalid year", 400);
+  }
+
+  const start = new Date(Date.UTC(year, 0, 1, 0, 0, 0));
+  const end = new Date(Date.UTC(year + 1, 0, 1, 0, 0, 0));
+
+  // KPI counts
+  const [
+    totalUsers,
+    totalBerbers,
+    totalAdmins,
+    vendorPending,
+    vendorVerified,
+    statusAgg,
+    genderAgg,
+    topCitiesAgg,
+    paymentsAgg,
+    languagesAgg,
+    regsByMonthAgg,
+    berbersByMonthAgg,
+    latestUsers,
+    latestBerbers,
+  ] = await Promise.all([
+    User.countDocuments({}),
+    User.countDocuments({ role: "berber" }),
+    User.countDocuments({ role: "admin" }),
+
+    User.countDocuments({ role: "berber", vendorStatus: "pending" }),
+    User.countDocuments({ role: "berber", vendorStatus: "verified" }),
+
+    User.aggregate([
+      { $group: { _id: "$status", count: { $sum: 1 } } },
+      { $project: { _id: 0, status: "$_id", count: 1 } },
+    ]),
+
+    User.aggregate([
+      { $match: { gender: { $in: ["male", "female", "other"] } } },
+      { $group: { _id: "$gender", count: { $sum: 1 } } },
+      { $project: { _id: 0, gender: "$_id", count: 1 } },
+    ]),
+
+    // Top cities for berbers/vendors
+    User.aggregate([
+      { $match: { role: "berber", "address.city": { $exists: true, $ne: "" } } },
+      { $group: { _id: "$address.city", count: { $sum: 1 } } },
+      { $sort: { count: -1 } },
+      { $limit: 8 },
+      { $project: { _id: 0, city: "$_id", count: 1 } },
+    ]),
+
+    // Accepted payments distribution (berbers)
+    User.aggregate([
+      { $match: { role: "berber" } },
+      { $unwind: { path: "$acceptedPayments", preserveNullAndEmptyArrays: false } },
+      { $group: { _id: "$acceptedPayments", count: { $sum: 1 } } },
+      { $sort: { count: -1 } },
+      { $project: { _id: 0, method: "$_id", count: 1 } },
+    ]),
+
+    // Languages distribution (berbers)
+    User.aggregate([
+      { $match: { role: "berber" } },
+      { $unwind: { path: "$languages", preserveNullAndEmptyArrays: false } },
+      { $group: { _id: "$languages", count: { $sum: 1 } } },
+      { $sort: { count: -1 } },
+      { $limit: 10 },
+      { $project: { _id: 0, language: "$_id", count: 1 } },
+    ]),
+
+    // Registrations by month for selected year (all roles)
+    User.aggregate([
+      { $match: { createdAt: { $gte: start, $lt: end } } },
+      {
+        $group: {
+          _id: { $month: "$createdAt" },
+          count: { $sum: 1 },
+        },
+      },
+      { $sort: { "_id": 1 } },
+      { $project: { _id: 0, month: "$_id", count: 1 } },
+    ]),
+
+    // Berber registrations by month for selected year
+    User.aggregate([
+      { $match: { role: "berber", createdAt: { $gte: start, $lt: end } } },
+      {
+        $group: {
+          _id: { $month: "$createdAt" },
+          count: { $sum: 1 },
+        },
+      },
+      { $sort: { "_id": 1 } },
+      { $project: { _id: 0, month: "$_id", count: 1 } },
+    ]),
+
+    // Latest users
+    User.find({})
+      .select("name email role status avatar.url createdAt")
+      .sort({ createdAt: -1 })
+      .limit(6)
+      .lean(),
+
+    // Latest berbers
+    User.find({ role: "berber" })
+      .select("name email role vendorStatus status shopName shopLogo.url createdAt")
+      .sort({ createdAt: -1 })
+      .limit(6)
+      .lean(),
+  ]);
+
+  // Normalize monthly series to always return 12 months (handy for charts)
+  const toMonthlySeries = (agg) => {
+    const map = new Map(agg.map((x) => [x.month, x.count]));
+    return Array.from({ length: 12 }, (_, i) => {
+      const month = i + 1;
+      return { month, count: map.get(month) || 0 };
+    });
+  };
+
+  // Normalize status into a fixed object (handy for KPI tiles)
+  const status = ["active", "inactive", "blocked", "deleted"].reduce((acc, s) => {
+    acc[s] = 0;
+    return acc;
+  }, {});
+  for (const row of statusAgg) status[row.status] = row.count;
+
+  // Optional: quick growth numbers (last 7 and 30 days)
+  const now = new Date();
+  const daysAgo = (n) => new Date(now.getTime() - n * 24 * 60 * 60 * 1000);
+
+  const [newUsers7d, newUsers30d, newBerbers7d, newBerbers30d] = await Promise.all([
+    User.countDocuments({ createdAt: { $gte: daysAgo(7) } }),
+    User.countDocuments({ createdAt: { $gte: daysAgo(30) } }),
+    User.countDocuments({ role: "berber", createdAt: { $gte: daysAgo(7) } }),
+    User.countDocuments({ role: "berber", createdAt: { $gte: daysAgo(30) } }),
+  ]);
+
+  return sendResponse(res, {
+    statusCode: 200,
+    success: true,
+    message: "Admin dashboard data fetched",
+    data: {
+      year,
+
+      kpis: {
+        totalUsers,
+        totalBerbers,
+        totalAdmins,
+        vendorPending,
+        vendorVerified,
+
+        status, // {active,inactive,blocked,deleted}
+
+        growth: {
+          newUsers7d,
+          newUsers30d,
+          newBerbers7d,
+          newBerbers30d,
+        },
+      },
+
+      charts: {
+        registrationsByMonth: toMonthlySeries(regsByMonthAgg),
+        berberRegistrationsByMonth: toMonthlySeries(berbersByMonthAgg),
+
+        genderBreakdown: genderAgg, // [{gender,count}]
+        topCities: topCitiesAgg, // [{city,count}]
+        acceptedPayments: paymentsAgg, // [{method,count}]
+        languages: languagesAgg, // [{language,count}]
+      },
+
+      recent: {
+        latestUsers,
+        latestBerbers,
+      },
+    },
+  });
+});

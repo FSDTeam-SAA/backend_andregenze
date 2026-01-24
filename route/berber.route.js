@@ -8,6 +8,7 @@ import {
   getCampaignStats,
   getMyReservationsAsBerber,
   confirmReservation,
+  addStuff,
 } from "../controller/berber.controller.js";
 import { protect } from "../middleware/auth.middleware.js";
 import upload from "../middleware/multer.middleware.js";
@@ -33,6 +34,8 @@ router.put(
   ]),
   updateBerberProfile
 );
+
+router.patch("/staff-members", protect, addStuff);
 
 // campaigns and contests routes
 router.post("/campaigns", createCampaign);
