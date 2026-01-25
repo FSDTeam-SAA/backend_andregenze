@@ -10,6 +10,7 @@ import {
   confirmReservation,
   addStuff,
   getStaffMembers,
+  deleteStuff
 } from "../controller/berber.controller.js";
 import { protect } from "../middleware/auth.middleware.js";
 import upload from "../middleware/multer.middleware.js";
@@ -38,6 +39,7 @@ router.put(
 
 router.get("/staff-members", protect, getStaffMembers);
 router.patch("/staff-members", protect, addStuff);
+router.delete("/staff-members/:id", protect, deleteStuff);
 
 // campaigns and contests routes
 router.post("/campaigns", createCampaign);

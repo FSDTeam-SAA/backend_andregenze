@@ -1,13 +1,15 @@
 import express from "express";
 
-import authRoute from "../route/auth.route.js";
-import userRoute from "../route/user.route.js";
-import paymentRoute from "../route/payment.route.js";
-import contactUsRoute from "../route/contactUs.route.js";
 import adminRoute from "../route/admin.route.js";
+import authRoute from "../route/auth.route.js";
 import berberRoute from "../route/berber.route.js";
+import contactUsRoute from "../route/contactUs.route.js";
 import contestRoute from "../route/contest.route.js";
 import loyaltyRoute from "../route/loyality.route.js";
+import { } from "../route/notification.route.js";
+import paymentRoute from "../route/payment.route.js";
+import userRoute from "../route/user.route.js";
+import notificationRoute from "../route/notification.route.js";
 
 const router = express.Router();
 
@@ -20,4 +22,5 @@ router.use("/contact-us", contactUsRoute);
 router.use("/admin", adminRoute);
 router.use("/berber", berberRoute);
 router.use("/contest", contestRoute);
+router.use("/notification", notificationRoute);
 export default router;
