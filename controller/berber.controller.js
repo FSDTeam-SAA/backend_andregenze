@@ -847,11 +847,23 @@ export const addStuff = catchAsync(async (req, res) => {
   });
 });
 
+export const getStaffMembers = catchAsync(async (req, res) => {
+  const user = await User.findById(req.user._id)
+    .select("shopName, email, name, shopLogo")
+    .populate("staffMembers", "name email phone avatar");
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: "Staff members fetched",
+    data: user.staffMembers,
+  });
+});
+
 export const deleteStuff = catchAsync(async (req, res) => {
   const { userId } = req.body;
   const user = await User.findById(req.user._id);
-  if (user.role !== "berber") {
-    throw new AppError(httpStatus.FORBIDDEN, "Berber only");
+  if (user.role !== "user") {
+    throw new AppError(httpStatus.FORBIDDEN, "Users only");
   }
   const staffMembers = user.staffMembers || [];
   if (staffMembers.includes(userId)) {

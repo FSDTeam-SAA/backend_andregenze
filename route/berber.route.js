@@ -9,6 +9,7 @@ import {
   getMyReservationsAsBerber,
   confirmReservation,
   addStuff,
+  getStaffMembers,
 } from "../controller/berber.controller.js";
 import { protect } from "../middleware/auth.middleware.js";
 import upload from "../middleware/multer.middleware.js";
@@ -24,7 +25,7 @@ router.post(
     { name: "shopLogo", maxCount: 1 },
     { name: "portfolioImages", maxCount: 10 },
   ]),
-  setupBerberProfile
+  setupBerberProfile,
 );
 router.put(
   "/profile/update",
@@ -32,9 +33,10 @@ router.put(
     { name: "shopLogo", maxCount: 1 },
     { name: "portfolioImages", maxCount: 10 },
   ]),
-  updateBerberProfile
+  updateBerberProfile,
 );
 
+router.get("/staff-members", protect, getStaffMembers);
 router.patch("/staff-members", protect, addStuff);
 
 // campaigns and contests routes
