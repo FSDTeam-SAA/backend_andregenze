@@ -826,10 +826,10 @@ export const getHallOfFameWeb = catchAsync(async (req, res) => {
 });
 
 export const addStuff = catchAsync(async (req, res) => {
-  const {userIds} = req.body;
+  const { userIds } = req.body;
   const user = await User.findById(req.user._id);
-  if (user.role !== "berber") {
-    throw new AppError(httpStatus.FORBIDDEN, "Berber only");
+  if (user.role !== "user") {
+    throw new AppError(httpStatus.FORBIDDEN, "Users only");
   }
   const staffMembers = user.staffMembers || [];
   userIds.forEach((id) => {
@@ -845,10 +845,10 @@ export const addStuff = catchAsync(async (req, res) => {
     message: "Staff members added successfully",
     data: user.staffMembers,
   });
-})
+});
 
 export const deleteStuff = catchAsync(async (req, res) => {
-  const {userId} = req.body;
+  const { userId } = req.body;
   const user = await User.findById(req.user._id);
   if (user.role !== "berber") {
     throw new AppError(httpStatus.FORBIDDEN, "Berber only");
@@ -865,4 +865,4 @@ export const deleteStuff = catchAsync(async (req, res) => {
     message: "Staff members delete successfully",
     data: user.staffMembers,
   });
-})
+});
