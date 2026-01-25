@@ -15,7 +15,6 @@ export const getNotifications = catchAsync(async (req, res) => {
     options: { sort: { createdAt: -1 } },
   });
 
-  await Notification.updateMany(filter, { isRead: true });
   io.to(req.user._id.toString()).emit("notificationsUpdated", {
     updated: true,
   });
@@ -29,17 +28,14 @@ export const getNotifications = catchAsync(async (req, res) => {
 });
 
 export const markAsRead = catchAsync(async (req, res) => {
-  const { ids } = req.body;
-  await Notification.updateMany(
-    { _id: { $in: ids }, user: req.user._id },
-    { isRead: true }
-  );
+  const { id } = req.body;
+  await Notification.findByIdAndUpdate(id, { isRead: true });
   io.to(req.user._id.toString()).emit("notificationsUpdated", {
     updated: true,
   });
   sendResponse(res, {
     statusCode: httpStatus.OK,
     success: true,
-    message: "Notifications marked as read",
+    message: "Notification marked as read",
   });
 });
