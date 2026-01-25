@@ -828,8 +828,8 @@ export const getHallOfFameWeb = catchAsync(async (req, res) => {
 export const addStuff = catchAsync(async (req, res) => {
   const { userIds } = req.body;
   const user = await User.findById(req.user._id);
-  if (user.role !== "user") {
-    throw new AppError(httpStatus.FORBIDDEN, "Users only");
+  if (user.role !== "berber") {
+    throw new AppError(httpStatus.FORBIDDEN, "Berber only");
   }
   const staffMembers = user.staffMembers || [];
   userIds.forEach((id) => {
@@ -862,8 +862,8 @@ export const getStaffMembers = catchAsync(async (req, res) => {
 export const deleteStuff = catchAsync(async (req, res) => {
   const { userId } = req.body;
   const user = await User.findById(req.user._id);
-  if (user.role !== "user") {
-    throw new AppError(httpStatus.FORBIDDEN, "Users only");
+  if (user.role !== "berber") {
+    throw new AppError(httpStatus.FORBIDDEN, "Berber only");
   }
   const staffMembers = user.staffMembers || [];
   if (staffMembers.includes(userId)) {
