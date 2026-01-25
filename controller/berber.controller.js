@@ -847,6 +847,42 @@ export const addStuff = catchAsync(async (req, res) => {
   });
 });
 
+export const addStuffWithEmail = catchAsync(async (req, res) => {
+  const { email } = req.body;
+
+  if (!email) {
+    throw new AppError(httpStatus.BAD_REQUEST, "Email is required");
+  }
+
+  const user = await User.findOne({ email });
+  if (!user) {
+    throw new AppError(httpStatus.NOT_FOUND, "User not found");
+  }
+
+  const staffMembers = user.staffMembers || [];
+
+  if (!staffMembers.includes(user._id)) {
+    staffMembers.push(user._id);
+    user.staffMembers = staffMembers;
+
+    await user.save();
+
+    sendResponse(res, {
+      statusCode: httpStatus.OK,
+      success: true,
+      message: "Staff members added successfully",
+      data: user.staffMembers,
+    });
+  }
+
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: "User is already a staff member",
+    data: user.staffMembers,
+  });
+});
+
 export const getStaffMembers = catchAsync(async (req, res) => {
   const user = await User.findById(req.user._id)
     .select("shopName, email, name, shopLogo")
