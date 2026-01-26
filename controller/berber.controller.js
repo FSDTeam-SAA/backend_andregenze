@@ -868,9 +868,9 @@ export const addStuffWithEmail = catchAsync(async (req, res) => {
 
   if (!staffMembers.includes(user._id)) {
     staffMembers.push(user._id);
-    user.staffMembers = staffMembers;
+    berber.staffMembers = staffMembers;
 
-    await user.save();
+    await berber.save();
 
     sendResponse(res, {
       statusCode: httpStatus.OK,
