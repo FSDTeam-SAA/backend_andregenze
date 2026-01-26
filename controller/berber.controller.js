@@ -848,18 +848,23 @@ export const addStuff = catchAsync(async (req, res) => {
 });
 
 export const addStuffWithEmail = catchAsync(async (req, res) => {
-  const { email } = req.body;
+  const { email ,shopId} = req.body;
 
   if (!email) {
     throw new AppError(httpStatus.BAD_REQUEST, "Email is required");
   }
 
   const user = await User.findOne({ email });
+  const berber = await User.findById(shopId);
+
+  if (berber.role !== "berber") {
+    throw new AppError(httpStatus.FORBIDDEN, "Berber only");
+  }
   if (!user) {
     throw new AppError(httpStatus.NOT_FOUND, "User not found");
   }
 
-  const staffMembers = user.staffMembers || [];
+  const staffMembers = berber.staffMembers || [];
 
   if (!staffMembers.includes(user._id)) {
     staffMembers.push(user._id);
