@@ -8,6 +8,7 @@ import { Contest } from "../model/contest.model.js";
 import { Review } from "../model/review.model.js";
 import { Reservation } from "../model/reservation.model.js";
 import { Participation } from "../model/participation.model.js";
+import { loyalty } from "../model/loylalityPoint.model.js";
 
 const DEFAULT_TZ = "Asia/Dhaka";
 
@@ -755,7 +756,9 @@ export const getAdminDashboard = catchAsync(async (req, res) => {
   // KPI counts
   const [
     totalUsers,
+    totalActiveUsers,
     totalBerbers,
+    totalPoints,
     totalAdmins,
     vendorPending,
     vendorVerified,
@@ -770,7 +773,9 @@ export const getAdminDashboard = catchAsync(async (req, res) => {
     latestBerbers,
   ] = await Promise.all([
     User.countDocuments({}),
+    User.countDocuments({ status: "active" }),
     User.countDocuments({ role: "berber" }),
+    loyalty.countDocuments({}),
     User.countDocuments({ role: "admin" }),
 
     User.countDocuments({ role: "berber", vendorStatus: "pending" }),
@@ -892,7 +897,9 @@ export const getAdminDashboard = catchAsync(async (req, res) => {
 
       kpis: {
         totalUsers,
+        totalActiveUsers,
         totalBerbers,
+        totalPoints,
         totalAdmins,
         vendorPending,
         vendorVerified,
