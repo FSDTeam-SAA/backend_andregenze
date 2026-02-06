@@ -20,7 +20,21 @@ export const createLoyalty = catchAsync(async (req, res, next) => {
     //     throw new AppError(400, "Loyalty already exists for this shop & user");
     // }
 
-    const doc = await loyalty.create({ shopId, userId });
+      const doc = await loyalty.findOneAndUpdate(
+    { shopId, userId },
+    { $inc: { visitCount: 1 } },
+    { new: true, upsert: true }
+  );
+
+  if (doc.visitCount >= 10) {
+    await loyalty.updateOne(
+      { _id: doc._id },
+      {
+        $inc: { totalGiftPoints: 1 },
+        $set: { visitCount: 0 }, // reset counter
+      }
+    );
+  }
     sendResponse(res, {
         statusCode: 201,
         success: true,
@@ -41,8 +55,8 @@ export const getAllLoyalties = catchAsync(async (req, res, next) => {
     if (userId) filter.userId = userId;
 
     const docs = await loyalty.find(filter)
-        .populate("shopId", "name email")
-        .populate("userId", "name email")
+        .populate("shopId", "name email avatar")
+        .populate("userId", "name email avatar")
         .sort({ createdAt: -1 });
 
     sendResponse(res, {
@@ -132,38 +146,42 @@ export const getShopWiseLoyaltyCount = catchAsync(async (req, res, next) => {
     match.shopId = new mongoose.Types.ObjectId(shopId);
   }
 
-  const result = await loyalty.aggregate([
-    { $match: match },
-    {
-      $group: {
-        _id: "$shopId",
-        count: { $sum: 1 }, // loyal users count (records)
-      },
-    },
-    { $sort: { count: -1 } },
-    {
-      $lookup: {
-        from: "users",
-        localField: "_id",
-        foreignField: "_id",
-        as: "shop",
-      },
-    },
-    { $unwind: { path: "$shop", preserveNullAndEmptyArrays: true } },
-    {
-      $project: {
-        _id: 0,
-        shopId: "$_id",
-        count: 1,
-        shop: {
-          _id: "$shop._id",
-          name: "$shop.name",
-          email: "$shop.email",
-        },
-      },
-    },
-  ]);
-    sendResponse(res,{
+  // const result = await loyalty.aggregate([
+  //   { $match: match },
+  //   {
+  //     $group: {
+  //       _id: "$shopId",
+  //       count: { $sum: 1 }, // loyal users count (records)
+  //     },
+  //   },
+  //   { $sort: { count: -1 } },
+  //   {
+  //     $lookup: {
+  //       from: "users",
+  //       localField: "_id",
+  //       foreignField: "_id",
+  //       as: "shop",
+  //     },
+  //   },
+  //   { $unwind: { path: "$shop", preserveNullAndEmptyArrays: true } },
+  //   {
+  //     $project: {
+  //       _id: 0,
+  //       shopId: "$_id",
+  //       count: 1,
+  //       shop: {
+  //         _id: "$shop._id",
+  //         name: "$shop.name",
+  //         email: "$shop.email",
+  //         avatar: "$shop.avatar",
+  //       },
+  //     },
+  //   },
+  // ]);
+    
+  const result = await loyalty.findOne({userId: req.user._id, shopId: req.query.shopId}).populate("shopId", "name email avatar").populate("userId", "name email avatar");
+  
+  sendResponse(res,{
     statusCode: 200,
     success: true,
     message: "Loyalty fetched successfully",
@@ -180,39 +198,52 @@ export const getUserLoyaltyPointsShopWise = catchAsync(async (req, res, next) =>
 
   const uid = new mongoose.Types.ObjectId(userId);
 
-  const rows = await loyalty.aggregate([
-    { $match: { userId: uid } },
-    {
-      $group: {
-        _id: "$shopId",
-        points: { $sum: 1 }, // points = count of records for that shop
-      },
-    },
-    { $sort: { points: -1 } },
-    {
-      $lookup: {
-        from: "users",
-        localField: "_id",
-        foreignField: "_id",
-        as: "shop",
-      },
-    },
-    { $unwind: { path: "$shop", preserveNullAndEmptyArrays: true } },
-    {
-      $project: {
-        _id: 0,
-        shopId: "$_id",
-        points: 1,
-        shop: {
-          _id: "$shop._id",
-          name: "$shop.name",
-          email: "$shop.email",
-        },
-      },
-    },
-  ]);
+//   let rows = await loyalty.aggregate([
+//     { $match: { userId: uid } },
+//     {
+//       $group: {
+//         _id: "$shopId",
+//         points: { $sum: 1 }, // points = count of records for that shop
+//       },
+//     },
+//     { $sort: { points: -1 } },
+//     {
+//       $lookup: {
+//         from: "users",
+//         localField: "_id",
+//         foreignField: "_id",
+//         as: "shop",
+//       },
+//     },
+//     { $unwind: { path: "$shop", preserveNullAndEmptyArrays: true } },
+//     {
+//       $project: {
+//         _id: 0,
+//         shopId: "$_id",
+//         points: 1,
+//         shop: {
+//           _id: "$shop._id",
+//           name: "$shop.name",
+//           email: "$shop.email",
+//         },
+//       },
+//     },
+//   ]);
+// for (const r of rows) {
+//   if (r.points > 10) {
+//     await loyalty.updateOne(
+//       { shopId: r.shopId, userId: r.userId },
+//       {
+//         $inc: { totalGiftPoints: 1 },
+//       }
+//     );
+//     r.points = r.points - 10; // reset points after converting to gift point
+//   }
+// }
 
-  const totalPoints = rows.reduce((sum, r) => sum + (r.points || 0), 0);
+  const loyaltyDoc = await loyalty.findOne({ userId: uid }).populate("shopId", "name email avatar").populate("userId", "name email avatar");
+
+  const totalPoints = loyaltyDoc ? loyaltyDoc.visitCount : 0;
 
     sendResponse(res,{
     statusCode: 200,
