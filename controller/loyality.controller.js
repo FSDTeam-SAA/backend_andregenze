@@ -26,7 +26,7 @@ export const createLoyalty = catchAsync(async (req, res, next) => {
     { new: true, upsert: true }
   );
 
-  if (doc.visitCount >= 10) {
+  if (doc.visitCount > 10) {
     await loyalty.updateOne(
       { _id: doc._id },
       {
@@ -241,7 +241,7 @@ export const getUserLoyaltyPointsShopWise = catchAsync(async (req, res, next) =>
 //   }
 // }
 
-  const loyaltyDoc = await loyalty.findOne({ userId: uid }).populate("shopId", "name email avatar").populate("userId", "name email avatar");
+  const loyaltyDoc = await loyalty.find({ userId: uid }).populate("shopId", "name email avatar").populate("userId", "name email avatar");
 
   const totalPoints = loyaltyDoc ? loyaltyDoc.visitCount : 0;
 
@@ -249,6 +249,6 @@ export const getUserLoyaltyPointsShopWise = catchAsync(async (req, res, next) =>
     statusCode: 200,
     success: true,
     message: "Loyalty fetched successfully",
-    data: totalPoints,
+    data: loyaltyDoc,
   })
 });
