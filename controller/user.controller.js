@@ -595,9 +595,10 @@ export const deleteReservation = catchAsync(async (req, res) => {
 });
 
 export const getMyReservations = catchAsync(async (req, res) => {
-  const { status } = req.query; // "all", "pending", "confirmed"
+  const { status,shopId } = req.query; // "all", "pending", "confirmed"
   const filter = { user: req.user._id };
   if (status && status !== "all") filter.status = status;
+  if(shopId) filter.berber = shopId
 
   const reservations = await Reservation.find(filter)
     .populate(["berber", "user"], "name shopName avatar")
