@@ -135,6 +135,7 @@ const userSchema = new Schema(
     resetPasswordOTP: { type: String },
     resetPasswordOTPExpiry: { type: Date },
     deleteReason: { type: String },
+    about: { type: String },
   },
   { timestamps: true },
 );

@@ -9,6 +9,7 @@ import { Review } from "../model/review.model.js";
 import { Reservation } from "../model/reservation.model.js";
 import { Participation } from "../model/participation.model.js";
 import { loyalty } from "../model/loylalityPoint.model.js";
+import { getAvailableSlotsForDays, isSlotAvailable } from "../utils/slotService.js";
 
 const DEFAULT_TZ = "Asia/Dhaka";
 
@@ -108,6 +109,7 @@ export const updateProfile = catchAsync(async (req, res) => {
   if (updates.openingHours) user.openingHours = updates.openingHours;
   if (updates.services) user.services = updates.services;
   if (updates.languages) user.languages = updates.languages;
+  if (updates.about) user.about = updates.about;
   if (updates.acceptedPayments)
     user.acceptedPayments = updates.acceptedPayments;
 
@@ -502,31 +504,52 @@ export const searchBerbers = catchAsync(async (req, res) => {
 
 export const getBerber = catchAsync(async (req, res) => {
   const { id } = req.params;
+  const daysToFetch = req.query.days || 7; // Default 7 days, can be customized
+  
   const berber = await User.findById(id);
   if (!berber) throw new AppError(httpStatus.NOT_FOUND, "Berber not found");
 
+  // Generate available slots for the specified number of days
+  let availableSlots = {};
+  if (berber.role === "berber" && berber.openingHours?.length > 0) {
+    availableSlots = await getAvailableSlotsForDays(
+      berber,
+      parseInt(daysToFetch),
+      Reservation
+    );
+  }
+
+  const response = berber.toObject ? berber.toObject() : berber;
+  
   sendResponse(res, {
     statusCode: httpStatus.OK,
     success: true,
     message: "Berber fetched",
-    data: berber,
+    data: {
+      ...response,
+      availableSlots, // Add available slots to response
+    },
   });
 });
 
 // Reservations
 export const createReservation = catchAsync(async (req, res) => {
   const { berberId, serviceName, date, time } = req.body;
+  
+  // Validate input
+  if (!berberId || !serviceName || !date || !time) {
+    throw new AppError(httpStatus.BAD_REQUEST, "Missing required fields: berberId, serviceName, date, time");
+  }
+  
   const berber = await User.findById(berberId);
   if (!berber || berber.role !== "berber")
     throw new AppError(httpStatus.NOT_FOUND, "Berber not found");
 
-  // Query existing at date/time
-  const existing = await Reservation.findOne({
-    berber: berberId,
-    date: new Date(date),
-    time,
-  });
-  if (existing) throw new AppError(httpStatus.CONFLICT, "Slot booked");
+  // Validate requested slot is available using slot service
+  const slotAvailable = await isSlotAvailable(berber, new Date(date), time, Reservation);
+  if (!slotAvailable) {
+    throw new AppError(httpStatus.CONFLICT, "Slot not available or already booked");
+  }
 
   const reservation = await Reservation.create({
     user: req.user._id,
@@ -540,7 +563,7 @@ export const createReservation = catchAsync(async (req, res) => {
   sendResponse(res, {
     statusCode: httpStatus.CREATED,
     success: true,
-    message: "Reservation created",
+    message: "Reservation created successfully",
     data: reservation,
   });
 });
@@ -548,6 +571,11 @@ export const createReservation = catchAsync(async (req, res) => {
 export const updateReservation = catchAsync(async (req, res) => {
   const { id } = req.params;
   const { date, time } = req.body;
+  
+  if (!date || !time) {
+    throw new AppError(httpStatus.BAD_REQUEST, "Missing required fields: date, time");
+  }
+  
   const reservation = await Reservation.findOne({
     _id: id,
     user: req.user._id,
@@ -555,14 +583,21 @@ export const updateReservation = catchAsync(async (req, res) => {
   if (!reservation)
     throw new AppError(httpStatus.NOT_FOUND, "Reservation not found");
 
-  // Check new availability
+  const berber = await User.findById(reservation.berber);
+  if (!berber) throw new AppError(httpStatus.NOT_FOUND, "Berber not found");
+
+  // Check if new slot is available (excluding current reservation)
   const existing = await Reservation.findOne({
     _id: { $ne: id },
     berber: reservation.berber,
-    date: new Date(date),
+    date: {
+      $gte: new Date(date).setHours(0, 0, 0, 0),
+      $lt: new Date(date).setHours(23, 59, 59, 999),
+    },
     time,
+    status: { $in: ["pending", "confirmed"] },
   });
-  if (existing) throw new AppError(httpStatus.CONFLICT, "New slot booked");
+  if (existing) throw new AppError(httpStatus.CONFLICT, "New slot already booked");
 
   reservation.date = new Date(date);
   reservation.time = time;
@@ -572,7 +607,7 @@ export const updateReservation = catchAsync(async (req, res) => {
   sendResponse(res, {
     statusCode: httpStatus.OK,
     success: true,
-    message: "Reservation updated",
+    message: "Reservation updated successfully",
     data: reservation,
   });
 });
