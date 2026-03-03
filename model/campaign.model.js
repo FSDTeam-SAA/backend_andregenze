@@ -4,7 +4,7 @@ const campaignSchema = new Schema(
   {
     berber: { type: Schema.Types.ObjectId, ref: "User", required: true },
     name: { type: String, maxlength: 100 },
-    discount: { type: Number, min: 0, max: 100 },
+    discount: { type: String, trim: true },
     type: { type: String },
     startDate: { type: Date },
     endDate: { type: Date },

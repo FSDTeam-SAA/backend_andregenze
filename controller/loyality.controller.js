@@ -4,26 +4,38 @@ import { loyalty } from "../model/loylalityPoint.model.js";
 import catchAsync from "../utils/catchAsync.js";
 import sendResponse from "../utils/sendResponse.js";
 
+const SHOP_SELECT = "shopName name email avatar shopLogo role";
+const USER_SELECT = "name email avatar";
 
+const formatLoyalty = (doc) => {
+  const row = doc?.toObject ? doc.toObject() : doc;
+  if (!row) return row;
 
-export const createLoyalty = catchAsync(async (req, res, next) => {
-    const { userId } = req.body;
-    const shopId = req.user._id; // From auth middleware
+  if (row.shopId && typeof row.shopId === "object") {
+    row.shopId.displayName = row.shopId.shopName || row.shopId.name || "";
+    row.shopId.profilePicture =
+      row.shopId.shopLogo?.url || row.shopId.avatar?.url || "";
+  }
 
-    if (!userId) {
-        throw new AppError(400, "shopId and userId are required");
-    }
+  if (row.userId && typeof row.userId === "object") {
+    row.userId.profilePicture = row.userId.avatar?.url || "";
+  }
 
-    // // Prevent duplicate
-    // const exists = await loyalty.findOne({ shopId, userId });
-    // if (exists) {
-    //     throw new AppError(400, "Loyalty already exists for this shop & user");
-    // }
+  return row;
+};
 
-      const doc = await loyalty.findOneAndUpdate(
+export const createLoyalty = catchAsync(async (req, res) => {
+  const { userId } = req.body;
+  const shopId = req.user._id;
+
+  if (!userId) {
+    throw new AppError(400, "shopId and userId are required");
+  }
+
+  const doc = await loyalty.findOneAndUpdate(
     { shopId, userId },
     { $inc: { visitCount: 1 } },
-    { new: true, upsert: true }
+    { new: true, upsert: true },
   );
 
   if (doc.visitCount > 10) {
@@ -31,162 +43,102 @@ export const createLoyalty = catchAsync(async (req, res, next) => {
       { _id: doc._id },
       {
         $inc: { totalGiftPoints: 1 },
-        $set: { visitCount: 0 }, // reset counter
-      }
+        $set: { visitCount: 0 },
+      },
     );
   }
-    sendResponse(res, {
-        statusCode: 201,
-        success: true,
-        message: "Loyalty created successfully",
-        data: doc,
-    })
+
+  const updatedDoc = await loyalty
+    .findById(doc._id)
+    .populate("shopId", SHOP_SELECT)
+    .populate("userId", USER_SELECT);
+
+  sendResponse(res, {
+    statusCode: 201,
+    success: true,
+    message: "Loyalty created successfully",
+    data: formatLoyalty(updatedDoc),
+  });
 });
 
-/**
- * Get all loyalties (optionally filter by shopId/userId)
- * query: ?shopId=...&userId=...
- */
-export const getAllLoyalties = catchAsync(async (req, res, next) => {
-    const { shopId, userId } = req.query;
+export const getAllLoyalties = catchAsync(async (req, res) => {
+  const { shopId, userId } = req.query;
 
-    const filter = {};
-    if (shopId) filter.shopId = shopId;
-    if (userId) filter.userId = userId;
+  const filter = {};
+  if (shopId) filter.shopId = shopId;
+  if (userId) filter.userId = userId;
 
-    const docs = await loyalty.find(filter)
-        .populate("shopId", "name email avatar")
-        .populate("userId", "name email avatar")
-        .sort({ createdAt: -1 });
+  const docs = await loyalty
+    .find(filter)
+    .populate("shopId", SHOP_SELECT)
+    .populate("userId", USER_SELECT)
+    .sort({ createdAt: -1 });
 
-    sendResponse(res, {
-        statusCode: 201,
-        success: true,
-        message: "Loyalties fetched successfully",
-        data: docs,
-    })
+  sendResponse(res, {
+    statusCode: 200,
+    success: true,
+    message: "Loyalties fetched successfully",
+    data: docs.map((doc) => formatLoyalty(doc)),
+  });
 });
 
-/**
- * Get single loyalty by id
- */
-export const getLoyaltyById = catchAsync(async (req, res, next) => {
-    const { id } = req.params;
+export const getLoyaltyById = catchAsync(async (req, res) => {
+  const { id } = req.params;
 
-    const doc = await loyalty.findById(id)
-        .populate("shopId", "name email")
-        .populate("userId", "name email");
+  const doc = await loyalty
+    .findById(id)
+    .populate("shopId", SHOP_SELECT)
+    .populate("userId", USER_SELECT);
 
-    if (!doc) throw new AppError(404, "Loyalty not found")
+  if (!doc) throw new AppError(404, "Loyalty not found");
 
-    sendResponse(res, {
-        statusCode: 200,
-        success: true,
-        message: "Loyalty created successfully",
-        data: doc,
-    })
-});
-
-// /**
-//  * Update loyalty (shopId/userId)
-//  */
-// export const updateLoyalty = catchAsync(async (req, res, next) => {
-//     const { id } = req.params;
-//     const { shopId, userId } = req.body;
-
-//     const doc = await Loyalty.findById(id);
-//     if (!doc) throw new AppError("Loyalty not found", 404);
-
-//     // If changing both, also prevent duplicates
-//     const nextShopId = shopId ?? doc.shopId;
-//     const nextUserId = userId ?? doc.userId;
-
-//     const duplicate = await Loyalty.findOne({
-//         shopId: nextShopId,
-//         userId: nextUserId,
-//         _id: { $ne: id },
-//     });
-
-//     if (duplicate) {
-//         throw new AppError("Another loyalty already exists for this shop & user", 409);
-// }
-
-// doc.shopId = nextShopId;
-// doc.userId = nextUserId;
-
-// await doc.save();
-
-// return SendResponse(res, 200, true, "Loyalty updated successfully", doc);
-// });
-
-/**
- * Delete loyalty
- */
-export const deleteLoyalty = catchAsync(async (req, res, next) => {
-    const { id } = req.params;
-
-    const doc = await loyalty.findByIdAndDelete(id);
-    if (!doc) throw new AppError(404, "Loyalty not found");
-
-    sendResponse(res, {
-        statusCode: 201,
-        success: true,
-        message: "Loyalty delete successfully",
-        data: doc,
-    })
-});
-export const getShopWiseLoyaltyCount = catchAsync(async (req, res, next) => {
-  const { shopId } = req.query;
-
-  const match = {};
-  if (shopId) {
-    if (!mongoose.Types.ObjectId.isValid(shopId)) {
-      return next(new AppError("Invalid shopId", 400));
-    }
-    match.shopId = new mongoose.Types.ObjectId(shopId);
-  }
-
-  // const result = await loyalty.aggregate([
-  //   { $match: match },
-  //   {
-  //     $group: {
-  //       _id: "$shopId",
-  //       count: { $sum: 1 }, // loyal users count (records)
-  //     },
-  //   },
-  //   { $sort: { count: -1 } },
-  //   {
-  //     $lookup: {
-  //       from: "users",
-  //       localField: "_id",
-  //       foreignField: "_id",
-  //       as: "shop",
-  //     },
-  //   },
-  //   { $unwind: { path: "$shop", preserveNullAndEmptyArrays: true } },
-  //   {
-  //     $project: {
-  //       _id: 0,
-  //       shopId: "$_id",
-  //       count: 1,
-  //       shop: {
-  //         _id: "$shop._id",
-  //         name: "$shop.name",
-  //         email: "$shop.email",
-  //         avatar: "$shop.avatar",
-  //       },
-  //     },
-  //   },
-  // ]);
-    
-  const result = await loyalty.findOne({userId: req.user._id, shopId: req.query.shopId}).populate("shopId", "name email avatar").populate("userId", "name email avatar");
-  
-  sendResponse(res,{
+  sendResponse(res, {
     statusCode: 200,
     success: true,
     message: "Loyalty fetched successfully",
-    data: result,
-  })
+    data: formatLoyalty(doc),
+  });
+});
+
+export const deleteLoyalty = catchAsync(async (req, res) => {
+  const { id } = req.params;
+
+  const doc = await loyalty.findByIdAndDelete(id);
+  if (!doc) throw new AppError(404, "Loyalty not found");
+
+  sendResponse(res, {
+    statusCode: 201,
+    success: true,
+    message: "Loyalty delete successfully",
+    data: formatLoyalty(doc),
+  });
+});
+
+export const getShopWiseLoyaltyCount = catchAsync(async (req, res, next) => {
+  const { shopId } = req.query;
+
+  if (!shopId) {
+    throw new AppError(400, "shopId query is required");
+  }
+
+  if (!mongoose.Types.ObjectId.isValid(shopId)) {
+    return next(new AppError("Invalid shopId", 400));
+  }
+
+  const result = await loyalty
+    .findOne({
+      userId: req.user._id,
+      shopId: new mongoose.Types.ObjectId(shopId),
+    })
+    .populate("shopId", SHOP_SELECT)
+    .populate("userId", USER_SELECT);
+
+  sendResponse(res, {
+    statusCode: 200,
+    success: true,
+    message: "Loyalty fetched successfully",
+    data: formatLoyalty(result),
+  });
 });
 
 export const getUserLoyaltyPointsShopWise = catchAsync(async (req, res, next) => {
@@ -198,57 +150,15 @@ export const getUserLoyaltyPointsShopWise = catchAsync(async (req, res, next) =>
 
   const uid = new mongoose.Types.ObjectId(userId);
 
-//   let rows = await loyalty.aggregate([
-//     { $match: { userId: uid } },
-//     {
-//       $group: {
-//         _id: "$shopId",
-//         points: { $sum: 1 }, // points = count of records for that shop
-//       },
-//     },
-//     { $sort: { points: -1 } },
-//     {
-//       $lookup: {
-//         from: "users",
-//         localField: "_id",
-//         foreignField: "_id",
-//         as: "shop",
-//       },
-//     },
-//     { $unwind: { path: "$shop", preserveNullAndEmptyArrays: true } },
-//     {
-//       $project: {
-//         _id: 0,
-//         shopId: "$_id",
-//         points: 1,
-//         shop: {
-//           _id: "$shop._id",
-//           name: "$shop.name",
-//           email: "$shop.email",
-//         },
-//       },
-//     },
-//   ]);
-// for (const r of rows) {
-//   if (r.points > 10) {
-//     await loyalty.updateOne(
-//       { shopId: r.shopId, userId: r.userId },
-//       {
-//         $inc: { totalGiftPoints: 1 },
-//       }
-//     );
-//     r.points = r.points - 10; // reset points after converting to gift point
-//   }
-// }
+  const loyaltyDocs = await loyalty
+    .find({ userId: uid })
+    .populate("shopId", SHOP_SELECT)
+    .populate("userId", USER_SELECT);
 
-  const loyaltyDoc = await loyalty.find({ userId: uid }).populate("shopId", "name email avatar").populate("userId", "name email avatar");
-
-  const totalPoints = loyaltyDoc ? loyaltyDoc.visitCount : 0;
-
-    sendResponse(res,{
+  sendResponse(res, {
     statusCode: 200,
     success: true,
     message: "Loyalty fetched successfully",
-    data: loyaltyDoc,
-  })
+    data: loyaltyDocs.map((doc) => formatLoyalty(doc)),
+  });
 });
