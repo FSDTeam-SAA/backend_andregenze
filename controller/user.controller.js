@@ -33,27 +33,19 @@ const normalizeTimeString = (timeStr) => {
   return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`;
 };
 
-const parseJsonIfString = (value) => {
-  if (typeof value !== "string") return value;
-  try {
-    return JSON.parse(value);
-  } catch {
-    return value;
-  }
-};
-
-const buildSocialMedia = (updates = {}) => {
-  const parsedSocial = parseJsonIfString(updates.socialMedia);
-  const socialObject =
-    parsedSocial && typeof parsedSocial === "object" && !Array.isArray(parsedSocial)
-      ? parsedSocial
+const buildSocialMedia = (payload = {}) => {
+  const source =
+    payload.socialMedia &&
+    typeof payload.socialMedia === "object" &&
+    !Array.isArray(payload.socialMedia)
+      ? payload.socialMedia
       : {};
 
   const links = {
-    facebook: socialObject.facebook ?? updates.facebook,
-    instagram: socialObject.instagram ?? updates.instagram,
-    tiktok: socialObject.tiktok ?? updates.tiktok,
-    web: socialObject.web ?? updates.web ?? updates.website,
+    facebook: source.facebook ?? payload.facebook,
+    instagram: source.instagram ?? payload.instagram,
+    tiktok: source.tiktok ?? payload.tiktok,
+    web: source.web ?? payload.web ?? payload.website,
   };
 
   return Object.fromEntries(
@@ -61,6 +53,15 @@ const buildSocialMedia = (updates = {}) => {
       ([, value]) => typeof value === "string" && value.trim().length > 0,
     ),
   );
+};
+
+const parseJsonIfString = (value) => {
+  if (typeof value !== "string") return value;
+  try {
+    return JSON.parse(value);
+  } catch {
+    return value;
+  }
 };
 
 // helper: get day + minutes now; allow overrides for testing
@@ -153,9 +154,13 @@ export const updateProfile = catchAsync(async (req, res) => {
   if (updates.contactPersonName)
     user.contactPersonName = updates.contactPersonName;
   if (updates.shopDescription) user.shopDescription = updates.shopDescription;
+
   const socialMedia = buildSocialMedia(updates);
   if (Object.keys(socialMedia).length > 0) {
-    user.socialMedia = { ...user.socialMedia, ...socialMedia };
+    user.socialMedia = {
+      ...(user.socialMedia || {}),
+      ...socialMedia,
+    };
   }
   if (updates.staffMembers) user.staffMembers = updates.staffMembers;
   if (updates.openingHours) user.openingHours = updates.openingHours;
