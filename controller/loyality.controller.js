@@ -37,12 +37,16 @@ export const createLoyalty = catchAsync(async (req, res) => {
   }
 
   const now = new Date();
+  console.log("Finding active campaign for shop:", shopId);
+  console.log("Current date:", now);
 
   const activeCampaign = await Campaign.findOne({
     berber: shopId,
     startDate: { $lte: now },
     endDate: { $gte: now },
-  });
+  }).sort({ createdAt: -1 });
+
+  console.log("Active campaign found:", activeCampaign);
   if (!activeCampaign) {
     throw new AppError(404, "Active campaign not found for this shop");
   }
@@ -144,23 +148,76 @@ export const getShopWiseLoyaltyCount = catchAsync(async (req, res, next) => {
     return next(new AppError("Invalid shopId", 400));
   }
 
+  if (campaignId && !mongoose.Types.ObjectId.isValid(campaignId)) {
+    return next(new AppError("Invalid campaignId", 400));
+  }
+
   const query = {
-    userId: req.user._id,
     shopId: new mongoose.Types.ObjectId(shopId),
   };
-  if (campaignId) query.campaignId = campaignId;
+  if (campaignId) query.campaignId = new mongoose.Types.ObjectId(campaignId);
 
   const result = await loyalty
-    .findOne(query)
+    .find(query)
     .populate("shopId", SHOP_SELECT)
     .populate("userId", USER_SELECT)
-    .populate("campaignId", CAMPAIGN_SELECT);
+    .populate("campaignId", CAMPAIGN_SELECT)
+    .sort({ createdAt: -1 });
+
+  const COIN_TARGET = 10;
+
+  const grouped = new Map();
+  result.forEach((doc) => {
+    const row = formatLoyalty(doc);
+    const userKey = row?.userId?._id?.toString();
+    if (!userKey) return;
+
+    if (!grouped.has(userKey)) {
+      grouped.set(userKey, {
+        userId: row.userId._id,
+        userName: row.userId.name || "",
+        profilePicture: row.userId.profilePicture || "",
+        coinsCollected: 0,
+        completedRewardCards: 0,
+        campaignState: row.campaignState || null,
+      });
+    }
+
+    const item = grouped.get(userKey);
+    item.coinsCollected += Number(row.visitCount || 0);
+    item.completedRewardCards += Number(row.totalGiftPoints || 0);
+
+    if (item.campaignState !== "active" && row.campaignState === "active") {
+      item.campaignState = "active";
+    }
+  });
+
+  const customers = Array.from(grouped.values()).map((item) => ({
+    ...item,
+    coinsTarget: COIN_TARGET,
+    coinsProgress: `${String(item.coinsCollected).padStart(2, "0")} / ${COIN_TARGET}`,
+  }));
+
+  const summary = {
+    totalCustomers: customers.length,
+    totalCoinsCollected: customers.reduce(
+      (sum, item) => sum + item.coinsCollected,
+      0,
+    ),
+    totalCompletedRewardCards: customers.reduce(
+      (sum, item) => sum + item.completedRewardCards,
+      0,
+    ),
+  };
 
   sendResponse(res, {
     statusCode: 200,
     success: true,
     message: "Loyalty fetched successfully",
-    data: formatLoyalty(result),
+    data: {
+      summary,
+      customers,
+    },
   });
 });
 

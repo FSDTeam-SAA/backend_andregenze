@@ -142,7 +142,9 @@ export const setupBerberProfile = catchAsync(async (req, res) => {
     throw new AppError(httpStatus.BAD_REQUEST, "Shop logo required");
   }
 
-  const logoUpload = await uploadOnCloudinary(req.files.shopLogo[0].buffer);
+  const logoUpload = await uploadOnCloudinary(req.files.shopLogo[0], {
+    baseUrl: `${req.protocol}://${req.get("host")}`,
+  });
   user.shopLogo = {
     public_id: logoUpload.public_id,
     url: logoUpload.secure_url,
@@ -157,7 +159,11 @@ export const setupBerberProfile = catchAsync(async (req, res) => {
     const uploads = await Promise.all(
       req.files.portfolioImages
         .slice(0, 10)
-        .map((file) => uploadOnCloudinary(file.buffer)),
+        .map((file) =>
+          uploadOnCloudinary(file, {
+            baseUrl: `${req.protocol}://${req.get("host")}`,
+          }),
+        ),
     );
 
     portfolioImages = uploads.map((upload, i) => ({
@@ -263,7 +269,9 @@ export const updateBerberProfile = catchAsync(async (req, res) => {
   }
 
   if (req.files?.shopLogo?.[0]) {
-    const logoUpload = await uploadOnCloudinary(req.files.shopLogo[0].buffer);
+    const logoUpload = await uploadOnCloudinary(req.files.shopLogo[0], {
+      baseUrl: `${req.protocol}://${req.get("host")}`,
+    });
     user.shopLogo = {
       public_id: logoUpload.public_id,
       url: logoUpload.secure_url,
@@ -278,7 +286,11 @@ export const updateBerberProfile = catchAsync(async (req, res) => {
     const uploads = await Promise.all(
       req.files.portfolioImages
         .slice(0, 10)
-        .map((file) => uploadOnCloudinary(file.buffer)),
+        .map((file) =>
+          uploadOnCloudinary(file, {
+            baseUrl: `${req.protocol}://${req.get("host")}`,
+          }),
+        ),
     );
 
     user.portfolioImages = uploads.map((upload, i) => ({
@@ -431,6 +443,7 @@ export const getMyCampaigns = catchAsync(async (req, res) => {
 
 export const getCampaignStats = catchAsync(async (req, res) => {
   const { id } = req.params;
+  const requestedYear = req.query.year ? Number.parseInt(req.query.year, 10) : new Date().getFullYear();
   const campaign = await Campaign.findOne({ _id: id, berber: req.user._id });
   if (!campaign) throw new AppError(httpStatus.NOT_FOUND, "Campaign not found");
 
@@ -447,6 +460,15 @@ export const getCampaignStats = catchAsync(async (req, res) => {
         currentMembers: { $sum: 1 },
         totalVisits: { $sum: "$visitCount" },
         totalGiftPoints: { $sum: "$totalGiftPoints" },
+        upcomingCampaigns: {
+          $sum: { $cond: [{ $eq: ["$campaignState", "upcoming"] }, 1, 0] },
+        },
+        activeCampaigns: {
+          $sum: { $cond: [{ $eq: ["$campaignState", "active"] }, 1, 0] },
+        },
+        endedCampaigns: {
+          $sum: { $cond: [{ $eq: ["$campaignState", "ended"] }, 1, 0] },
+        },
       },
     },
   ]);
@@ -455,6 +477,9 @@ export const getCampaignStats = catchAsync(async (req, res) => {
     currentMembers: 0,
     totalVisits: 0,
     totalGiftPoints: 0,
+    upcomingCampaigns: 0,
+    activeCampaigns: 0,
+    endedCampaigns: 0,
   };
 
   const totalStampsCollected =
@@ -468,20 +493,137 @@ export const getCampaignStats = catchAsync(async (req, res) => {
         )
       : 0;
 
+  const monthlyStats = await loyalty.aggregate([
+    {
+      $match: {
+        shopId: req.user._id,
+        campaignId: campaign._id,
+        ...(Number.isNaN(requestedYear)
+          ? {}
+          : {
+              createdAt: {
+                $gte: new Date(requestedYear, 0, 1),
+                $lt: new Date(requestedYear + 1, 0, 1),
+              },
+            }),
+      },
+    },
+    {
+      $project: {
+        month: { $month: "$createdAt" },
+        year: { $year: "$createdAt" },
+        stampsCollected: {
+          $add: [
+            { $multiply: ["$totalGiftPoints", campaign.totalStamps] },
+            "$visitCount",
+          ],
+        },
+      },
+    },
+    {
+      $group: {
+        _id: { month: "$month", year: "$year" },
+        count: { $sum: "$stampsCollected" },
+      },
+    },
+    {
+      $sort: { "_id.year": 1, "_id.month": 1 },
+    },
+  ]);
+
+  const monthLabels = [
+    "Jan",
+    "Feb",
+    "Mar",
+    "Apr",
+    "May",
+    "Jun",
+    "Jul",
+    "Aug",
+    "Sep",
+    "Oct",
+    "Nov",
+    "Dec",
+  ];
+
+  const monthlyLookup = new Map(
+    monthlyStats.map((item) => [
+      `${item._id.year}-${item._id.month}`,
+      item.count,
+    ]),
+  );
+
+  const stampSeries = Array.from({ length: 12 }, (_, index) => {
+    const monthNumber = index + 1;
+
+    return {
+      month: monthLabels[index],
+      value: monthlyLookup.get(`${requestedYear}-${monthNumber}`) || 0,
+      monthNumber,
+      year: requestedYear,
+    };
+  });
+
+  const selectedYear = requestedYear;
+
   const stats = {
-    ...(campaign.stats?.toObject ? campaign.stats.toObject() : campaign.stats),
     currentMembers: aggregated.currentMembers,
     totalVisits: aggregated.totalVisits,
     totalGiftPoints: aggregated.totalGiftPoints,
     totalStampsCollected,
     successRate,
+      stampsPerMonth: stampSeries.map((item) => ({
+        month: item.monthNumber,
+        year: item.year,
+        count: item.value,
+      })),
   };
 
   sendResponse(res, {
     statusCode: httpStatus.OK,
     success: true,
     message: "Stats fetched",
-    data: stats,
+    data: {
+      campaign: {
+        _id: campaign._id,
+        name: campaign.name,
+        discount: campaign.discount,
+        type: campaign.type,
+        startDate: campaign.startDate,
+        endDate: campaign.endDate,
+        totalStamps: campaign.totalStamps,
+      },
+      header: {
+        title: "Campaign Insights",
+        subtitle: "View your Success Rate",
+      },
+      filter: {
+        label: `Stamps Per Month ${selectedYear}`,
+        value: "stamps-per-month",
+        year: selectedYear,
+      },
+      chart: {
+        title: "Stamp Per Month",
+        type: "bar",
+        labels: monthLabels,
+        data: stampSeries.map((item) => ({
+          label: item.month,
+          value: item.value,
+        })),
+      },
+      stats,
+      loyaltySummary: {
+        currentMembers: aggregated.currentMembers,
+        totalVisits: aggregated.totalVisits,
+        totalGiftPoints: aggregated.totalGiftPoints,
+        campaignStates: {
+          upcoming: aggregated.upcomingCampaigns,
+          active: aggregated.activeCampaigns,
+          ended: aggregated.endedCampaigns,
+          total: aggregated.currentMembers,
+        },
+      },
+    },
   });
 });
 
@@ -604,7 +746,9 @@ export const participateInContest = catchAsync(async (req, res) => {
     throw new AppError(httpStatus.BAD_REQUEST, "Already participating");
 
   if (req.file) {
-    const upload = await uploadOnCloudinary(req.file.buffer);
+    const upload = await uploadOnCloudinary(req.file, {
+      baseUrl: `${req.protocol}://${req.get("host")}`,
+    });
     participation = await Participation.create({
       contest: contest._id,
       user: req.user._id,
@@ -639,7 +783,9 @@ export const updateParticipation = catchAsync(async (req, res) => {
   participation.votes = 0;
 
   if (req.file) {
-    const upload = await uploadOnCloudinary(req.file.buffer);
+    const upload = await uploadOnCloudinary(req.file, {
+      baseUrl: `${req.protocol}://${req.get("host")}`,
+    });
     participation.photo = {
       public_id: upload.public_id,
       url: upload.secure_url,

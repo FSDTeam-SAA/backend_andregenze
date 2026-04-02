@@ -3,6 +3,7 @@ import express from "express";
 import cors from "cors";
 import mongoose from "mongoose";
 import cookieParser from "cookie-parser";
+import path from "path";
 import router from "./mainroute/index.js";
 import { createServer } from "http";
 import { Server } from "socket.io";
@@ -34,7 +35,8 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
-app.use("/public", express.static("public"));
+const publicDir = path.resolve("public");
+app.use("/public", express.static(publicDir));
 
 // Mount the main router
 app.use("/api/v1", router);

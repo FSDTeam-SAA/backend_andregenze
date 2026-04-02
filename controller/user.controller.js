@@ -172,13 +172,17 @@ export const updateProfile = catchAsync(async (req, res) => {
 
   // Existing avatar upload
   if (req.files?.avatar) {
-    const upload = await uploadOnCloudinary(req.files.avatar[0].buffer);
+    const upload = await uploadOnCloudinary(req.files.avatar[0], {
+      baseUrl: `${req.protocol}://${req.get("host")}`,
+    });
     user.avatar = { public_id: upload.public_id, url: upload.secure_url };
   }
 
   // New: shopLogo (single)
   if (req.files?.shopLogo) {
-    const upload = await uploadOnCloudinary(req.files.shopLogo[0].buffer);
+    const upload = await uploadOnCloudinary(req.files.shopLogo[0], {
+      baseUrl: `${req.protocol}://${req.get("host")}`,
+    });
     user.shopLogo = { public_id: upload.public_id, url: upload.secure_url };
   }
 
@@ -187,7 +191,11 @@ export const updateProfile = catchAsync(async (req, res) => {
     const uploads = await Promise.all(
       req.files.portfolioImages
         .slice(0, 10)
-        .map((file) => uploadOnCloudinary(file.buffer)),
+        .map((file) =>
+          uploadOnCloudinary(file, {
+            baseUrl: `${req.protocol}://${req.get("host")}`,
+          }),
+        ),
     );
     const newImages = uploads.map((upload, i) => ({
       public_id: upload.public_id,

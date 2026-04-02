@@ -1,7 +1,8 @@
 import crypto from "crypto";
 import bcrypt from "bcryptjs";
 import { v4 as uuidv4 } from "uuid";
-import { v2 as cloudinary } from "cloudinary";
+import fs from "fs/promises";
+import path from "path";
 import nodemailer from "nodemailer";
 
 // Generate a random OTP
@@ -53,24 +54,69 @@ export const sendOTP = async (email, code) => {
   await transporter.sendMail(mailOptions);
 };
 
-cloudinary.config({
-  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-  api_key: process.env.CLOUDINARY_API_KEY,
-  api_secret: process.env.CLOUDINARY_API_SECRET,
-});
+const uploadDir = path.resolve("public/uploads");
 
-export const uploadOnCloudinary = (fileBuffer, options = {}) => {
-  return new Promise((resolve, reject) => {
-    const stream = cloudinary.uploader.upload_stream(
-      { ...options },
-      (error, result) => {
-        if (error) {
-          console.error("Cloudinary upload error:", error);
-          return reject(error);
-        }
-        resolve(result);
-      }
-    );
-    stream.end(fileBuffer);
-  });
+const getExtension = (fileName = "", mimeType = "") => {
+  const existingExtension = path.extname(fileName).toLowerCase();
+  if (existingExtension) return existingExtension;
+
+  const mimeMap = {
+    "image/jpeg": ".jpg",
+    "image/jpg": ".jpg",
+    "image/png": ".png",
+    "image/webp": ".webp",
+    "image/gif": ".gif",
+    "image/svg+xml": ".svg",
+    "image/heic": ".heic",
+    "image/heif": ".heif",
+  };
+
+  return mimeMap[mimeType] || ".jpg";
 };
+
+const buildPublicUrl = (relativePath, baseUrlOverride = "") => {
+  const baseUrl =
+    baseUrlOverride ||
+    process.env.PUBLIC_URL ||
+    process.env.APP_URL ||
+    process.env.BACKEND_URL;
+  if (!baseUrl) return relativePath;
+
+  const normalizedBase = baseUrl.endsWith("/") ? baseUrl : `${baseUrl}/`;
+  return new URL(relativePath.replace(/^\//, ""), normalizedBase).toString();
+};
+
+export const uploadToLocalStorage = async (file, options = {}) => {
+  const buffer = Buffer.isBuffer(file) ? file : file?.buffer;
+  if (!buffer) {
+    throw new Error("File buffer is required");
+  }
+
+  await fs.mkdir(uploadDir, { recursive: true });
+
+  const sourceName =
+    (Buffer.isBuffer(file) ? options.originalname : file?.originalname) ||
+    options.originalname ||
+    "image";
+  const sourceMime =
+    (Buffer.isBuffer(file) ? options.mimetype : file?.mimetype) ||
+    options.mimetype ||
+    "image/jpeg";
+  const extension = getExtension(sourceName, sourceMime);
+  const fileName = `${crypto.randomUUID()}${extension}`;
+  const filePath = path.join(uploadDir, fileName);
+
+  await fs.writeFile(filePath, buffer);
+
+  const publicPath = `/public/uploads/${fileName}`;
+  const baseUrl = options.baseUrl || "";
+
+  return {
+    public_id: fileName,
+    url: buildPublicUrl(publicPath, baseUrl),
+    secure_url: buildPublicUrl(publicPath, baseUrl),
+    path: filePath,
+  };
+};
+
+export const uploadOnCloudinary = uploadToLocalStorage;
