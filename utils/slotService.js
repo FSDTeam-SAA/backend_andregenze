@@ -5,6 +5,26 @@
  * @param {Array} booked - Array of booked reservations
  * @returns {Array} Array of available time slots
  */
+const normalizeTimeString = (timeStr) => {
+  if (typeof timeStr !== "string" || !timeStr.includes(":")) return null;
+  const [rawHours, rawMinutes = "0"] = timeStr.split(":");
+  const hours = Number(rawHours);
+  const minutes = Number(rawMinutes);
+
+  if (
+    !Number.isInteger(hours) ||
+    !Number.isInteger(minutes) ||
+    hours < 0 ||
+    hours > 23 ||
+    minutes < 0 ||
+    minutes > 59
+  ) {
+    return null;
+  }
+
+  return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`;
+};
+
 export const generateAvailableSlots = (barber, date, booked = []) => {
   const dayName = new Date(date)
     .toLocaleDateString("en-US", { weekday: "long" })
@@ -24,9 +44,10 @@ export const generateAvailableSlots = (barber, date, booked = []) => {
 
   // Parse times (assuming format HH:mm)
   const parseTime = (timeStr) => {
-    if (!timeStr) return null;
-    const [hours, minutes] = timeStr.split(":").map(Number);
-    return hours * 60 + (minutes || 0);
+    const normalized = normalizeTimeString(timeStr);
+    if (!normalized) return null;
+    const [hours, minutes] = normalized.split(":").map(Number);
+    return hours * 60 + minutes;
   };
 
   const openMinutes = parseTime(dayHours.open);
@@ -37,16 +58,15 @@ export const generateAvailableSlots = (barber, date, booked = []) => {
   }
 
   // Create booked times set for quick lookup
-  const bookedTimes = new Set(
-    booked.map((b) => {
-      const dateStr = new Date(b.date).toDateString();
-      const currentDateStr = new Date(date).toDateString();
-      if (dateStr === currentDateStr) {
-        return b.time;
-      }
-      return null;
-    })
-  );
+  const bookedTimes = new Set();
+  const currentDateStr = new Date(date).toDateString();
+  for (const booking of booked) {
+    const dateStr = new Date(booking.date).toDateString();
+    if (dateStr !== currentDateStr) continue;
+
+    const normalized = normalizeTimeString(booking.time);
+    if (normalized) bookedTimes.add(normalized);
+  }
 
   // Generate slots
   for (let minutes = openMinutes; minutes < closeMinutes; minutes += slotDuration) {
@@ -136,16 +156,25 @@ export const isSlotAvailable = async (barber, date, time, Reservation) => {
     return false;
   }
 
-  // Check if already booked
-  const existing = await Reservation.findOne({
+  const normalizedRequestedTime = normalizeTimeString(time);
+  if (!normalizedRequestedTime) {
+    return false;
+  }
+
+  // Check if already booked (normalize existing reservation times too)
+  const existingReservations = await Reservation.find({
     berber: barber._id,
     date: {
       $gte: new Date(date).setHours(0, 0, 0, 0),
       $lt: new Date(date).setHours(23, 59, 59, 999),
     },
-    time,
     status: { $in: ["pending", "confirmed"] },
   });
 
-  return !existing;
+  const alreadyBooked = existingReservations.some(
+    (reservation) =>
+      normalizeTimeString(reservation.time) === normalizedRequestedTime,
+  );
+
+  return !alreadyBooked;
 };

@@ -93,7 +93,7 @@ const userSchema = new Schema(
     acceptedPayments: [
       {
         type: String,
-        enum: ["cash", "credit_card", "paypal", "bank_card"],
+        enum: ["cash", "credit_card", "paypal", "bank_card", "apple_pay"],
       },
     ],
     portfolioImages: [

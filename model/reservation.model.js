@@ -6,6 +6,7 @@ const reservationSchema = new Schema(
     berber: { type: Schema.Types.ObjectId, ref: "User", required: true },
     service: { type: Schema.Types.ObjectId, refPath: "berber.services" },
     serviceName: { type: String },
+    price: { type: Number, min: 0 },
     date: { type: Date },
     time: { type: String },
     status: {

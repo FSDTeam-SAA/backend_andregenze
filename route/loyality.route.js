@@ -11,11 +11,11 @@ router.route("/")
   .post(createLoyalty)
   .get(getAllLoyalties);
 
+router.get("/counts/shop-wise", getShopWiseLoyaltyCount);
+router.get("/user/:userId/points", getUserLoyaltyPointsShopWise);
+
 router.route("/:id")
   .get(getLoyaltyById)
   .delete(deleteLoyalty);
-
-router.get("/counts/shop-wise", getShopWiseLoyaltyCount);
-router.get("/user/:userId/points", getUserLoyaltyPointsShopWise);
 
 export default router;

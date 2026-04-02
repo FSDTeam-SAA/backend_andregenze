@@ -13,6 +13,57 @@ import { getAvailableSlotsForDays, isSlotAvailable } from "../utils/slotService.
 
 const DEFAULT_TZ = "Asia/Dhaka";
 
+const normalizeTimeString = (timeStr) => {
+  if (typeof timeStr !== "string" || !timeStr.includes(":")) return null;
+  const [rawHours, rawMinutes = "0"] = timeStr.split(":");
+  const hours = Number(rawHours);
+  const minutes = Number(rawMinutes);
+
+  if (
+    !Number.isInteger(hours) ||
+    !Number.isInteger(minutes) ||
+    hours < 0 ||
+    hours > 23 ||
+    minutes < 0 ||
+    minutes > 59
+  ) {
+    return null;
+  }
+
+  return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`;
+};
+
+const buildSocialMedia = (payload = {}) => {
+  const source =
+    payload.socialMedia &&
+    typeof payload.socialMedia === "object" &&
+    !Array.isArray(payload.socialMedia)
+      ? payload.socialMedia
+      : {};
+
+  const links = {
+    facebook: source.facebook ?? payload.facebook,
+    instagram: source.instagram ?? payload.instagram,
+    tiktok: source.tiktok ?? payload.tiktok,
+    web: source.web ?? payload.web ?? payload.website,
+  };
+
+  return Object.fromEntries(
+    Object.entries(links).filter(
+      ([, value]) => typeof value === "string" && value.trim().length > 0,
+    ),
+  );
+};
+
+const parseJsonIfString = (value) => {
+  if (typeof value !== "string") return value;
+  try {
+    return JSON.parse(value);
+  } catch {
+    return value;
+  }
+};
+
 // helper: get day + minutes now; allow overrides for testing
 const getDayAndMinutesNow = (req) => {
   // override for testing:
@@ -103,8 +154,14 @@ export const updateProfile = catchAsync(async (req, res) => {
   if (updates.contactPersonName)
     user.contactPersonName = updates.contactPersonName;
   if (updates.shopDescription) user.shopDescription = updates.shopDescription;
-  if (updates.socialMedia)
-    user.socialMedia = { ...user.socialMedia, ...updates.socialMedia };
+
+  const socialMedia = buildSocialMedia(updates);
+  if (Object.keys(socialMedia).length > 0) {
+    user.socialMedia = {
+      ...(user.socialMedia || {}),
+      ...socialMedia,
+    };
+  }
   if (updates.staffMembers) user.staffMembers = updates.staffMembers;
   if (updates.openingHours) user.openingHours = updates.openingHours;
   if (updates.services) user.services = updates.services;
@@ -535,28 +592,57 @@ export const getBerber = catchAsync(async (req, res) => {
 // Reservations
 export const createReservation = catchAsync(async (req, res) => {
   const { berberId, serviceName, date, time } = req.body;
-  
+
   // Validate input
   if (!berberId || !serviceName || !date || !time) {
-    throw new AppError(httpStatus.BAD_REQUEST, "Missing required fields: berberId, serviceName, date, time");
+    throw new AppError(
+      httpStatus.BAD_REQUEST,
+      "Missing required fields: berberId, serviceName, date, time",
+    );
   }
-  
+
   const berber = await User.findById(berberId);
   if (!berber || berber.role !== "berber")
     throw new AppError(httpStatus.NOT_FOUND, "Berber not found");
 
+  const normalizedTime = normalizeTimeString(time);
+  if (!normalizedTime) {
+    throw new AppError(httpStatus.BAD_REQUEST, "Invalid time format");
+  }
+
+  const selectedService = (berber.services || []).find(
+    (service) =>
+      service?.name?.trim().toLowerCase() ===
+      String(serviceName).trim().toLowerCase(),
+  );
+  if (!selectedService) {
+    throw new AppError(
+      httpStatus.BAD_REQUEST,
+      "Selected service not found for this berber",
+    );
+  }
+
   // Validate requested slot is available using slot service
-  const slotAvailable = await isSlotAvailable(berber, new Date(date), time, Reservation);
+  const slotAvailable = await isSlotAvailable(
+    berber,
+    new Date(date),
+    normalizedTime,
+    Reservation,
+  );
   if (!slotAvailable) {
-    throw new AppError(httpStatus.CONFLICT, "Slot not available or already booked");
+    throw new AppError(
+      httpStatus.CONFLICT,
+      "Slot not available or already booked",
+    );
   }
 
   const reservation = await Reservation.create({
     user: req.user._id,
     berber: berberId,
-    serviceName,
+    serviceName: selectedService.name,
+    price: selectedService.price ?? 0,
     date: new Date(date),
-    time,
+    time: normalizedTime,
   });
 
   await reservation.populate(["user", "berber"], "name shopName avatar");
@@ -571,11 +657,19 @@ export const createReservation = catchAsync(async (req, res) => {
 export const updateReservation = catchAsync(async (req, res) => {
   const { id } = req.params;
   const { date, time } = req.body;
-  
+
   if (!date || !time) {
-    throw new AppError(httpStatus.BAD_REQUEST, "Missing required fields: date, time");
+    throw new AppError(
+      httpStatus.BAD_REQUEST,
+      "Missing required fields: date, time",
+    );
   }
-  
+
+  const normalizedTime = normalizeTimeString(time);
+  if (!normalizedTime) {
+    throw new AppError(httpStatus.BAD_REQUEST, "Invalid time format");
+  }
+
   const reservation = await Reservation.findOne({
     _id: id,
     user: req.user._id,
@@ -587,20 +681,24 @@ export const updateReservation = catchAsync(async (req, res) => {
   if (!berber) throw new AppError(httpStatus.NOT_FOUND, "Berber not found");
 
   // Check if new slot is available (excluding current reservation)
-  const existing = await Reservation.findOne({
+  const sameDayReservations = await Reservation.find({
     _id: { $ne: id },
     berber: reservation.berber,
     date: {
       $gte: new Date(date).setHours(0, 0, 0, 0),
       $lt: new Date(date).setHours(23, 59, 59, 999),
     },
-    time,
     status: { $in: ["pending", "confirmed"] },
   });
-  if (existing) throw new AppError(httpStatus.CONFLICT, "New slot already booked");
+
+  const existing = sameDayReservations.some(
+    (row) => normalizeTimeString(row.time) === normalizedTime,
+  );
+  if (existing)
+    throw new AppError(httpStatus.CONFLICT, "New slot already booked");
 
   reservation.date = new Date(date);
-  reservation.time = time;
+  reservation.time = normalizedTime;
   await reservation.save();
 
   await reservation.populate(["user", "berber"], "name shopName avatar");
@@ -630,20 +728,41 @@ export const deleteReservation = catchAsync(async (req, res) => {
 });
 
 export const getMyReservations = catchAsync(async (req, res) => {
-  const { status,shopId } = req.query; // "all", "pending", "confirmed"
+  const { status, shopId } = req.query; // "all", "pending", "confirmed"
   const filter = { user: req.user._id };
   if (status && status !== "all") filter.status = status;
-  if(shopId) filter.berber = shopId
+  if (shopId) filter.berber = shopId;
 
   const reservations = await Reservation.find(filter)
-    .populate(["berber", "user"], "name shopName avatar")
+    .populate("berber", "name shopName avatar services.name services.price")
+    .populate("user", "name shopName avatar")
     .sort({ date: -1 });
+
+  const reservationsWithPrice = reservations.map((reservation) => {
+    if (reservation.price !== undefined && reservation.price !== null) {
+      return reservation;
+    }
+
+    const matchedService = reservation.berber?.services?.find(
+      (service) =>
+        service?.name?.trim().toLowerCase() ===
+        String(reservation.serviceName || "")
+          .trim()
+          .toLowerCase(),
+    );
+
+    if (matchedService?.price !== undefined) {
+      reservation.price = matchedService.price;
+    }
+
+    return reservation;
+  });
 
   sendResponse(res, {
     statusCode: httpStatus.OK,
     success: true,
     message: "Reservations fetched",
-    data: reservations,
+    data: reservationsWithPrice,
   });
 });
 

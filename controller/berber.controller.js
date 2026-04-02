@@ -10,6 +10,37 @@ import { uploadOnCloudinary } from "../utils/commonMethod.js";
 import sendResponse from "../utils/sendResponse.js";
 import httpStatus from "http-status";
 
+const parseIfJson = (value) => {
+  if (typeof value !== "string") return value;
+  try {
+    return JSON.parse(value);
+  } catch {
+    return value;
+  }
+};
+
+const buildSocialMedia = (payload = {}) => {
+  const source =
+    payload.socialMedia &&
+    typeof payload.socialMedia === "object" &&
+    !Array.isArray(payload.socialMedia)
+      ? payload.socialMedia
+      : {};
+
+  const links = {
+    facebook: source.facebook ?? payload.facebook,
+    instagram: source.instagram ?? payload.instagram,
+    tiktok: source.tiktok ?? payload.tiktok,
+    web: source.web ?? payload.web ?? payload.website,
+  };
+
+  return Object.fromEntries(
+    Object.entries(links).filter(
+      ([, value]) => typeof value === "string" && value.trim().length > 0,
+    ),
+  );
+};
+
 export const setupBerberProfile = catchAsync(async (req, res) => {
   const user = await User.findById(req.user._id);
   if (!user) throw new AppError(httpStatus.NOT_FOUND, "User not found");
@@ -21,15 +52,6 @@ export const setupBerberProfile = catchAsync(async (req, res) => {
   if (user.profileCompletion > 0) {
     throw new AppError(httpStatus.BAD_REQUEST, "Profile already set up");
   }
-
-  const parseIfJson = (v) => {
-    if (typeof v !== "string") return v;
-    try {
-      return JSON.parse(v);
-    } catch {
-      return v;
-    }
-  };
 
   const jsonFields = [
     "socialMedia",
@@ -49,7 +71,6 @@ export const setupBerberProfile = catchAsync(async (req, res) => {
   const {
     shopName,
     shopDescription,
-    socialMedia,
     staffMembers,
     openingHours,
     services,
@@ -88,12 +109,7 @@ export const setupBerberProfile = catchAsync(async (req, res) => {
 
   user.shopDescription = shopDescription || "";
 
-  user.socialMedia =
-    socialMedia &&
-    typeof socialMedia === "object" &&
-    !Array.isArray(socialMedia)
-      ? socialMedia
-      : {};
+  user.socialMedia = buildSocialMedia(req.body);
 
   user.shopName = shopName || "";
   user.staffMembers = Array.isArray(staffMembers) ? staffMembers : [];
@@ -174,15 +190,6 @@ export const updateBerberProfile = catchAsync(async (req, res) => {
     throw new AppError(httpStatus.FORBIDDEN, "Berber update only");
   }
 
-  const parseIfJson = (v) => {
-    if (typeof v !== "string") return v;
-    try {
-      return JSON.parse(v);
-    } catch {
-      return v;
-    }
-  };
-
   const jsonFields = [
     "socialMedia",
     "staffMembers",
@@ -201,7 +208,6 @@ export const updateBerberProfile = catchAsync(async (req, res) => {
   const {
     shopName,
     shopDescription,
-    socialMedia,
     staffMembers,
     openingHours,
     services,
@@ -216,18 +222,19 @@ export const updateBerberProfile = catchAsync(async (req, res) => {
 
   if (shopDescription !== undefined) user.shopDescription = shopDescription;
 
-  if (
-    socialMedia &&
-    typeof socialMedia === "object" &&
-    !Array.isArray(socialMedia)
-  )
-    user.socialMedia = socialMedia;
+  const socialMedia = buildSocialMedia(req.body);
+  if (Object.keys(socialMedia).length > 0) {
+    user.socialMedia = {
+      ...(user.socialMedia || {}),
+      ...socialMedia,
+    };
+  }
 
-  if (Array.isArray(shopName)) user.shopName = shopName;
+  if (typeof shopName === "string") user.shopName = shopName;
 
   if (Array.isArray(staffMembers)) user.staffMembers = staffMembers;
 
-  if (Array.isArray(phone)) user.phone = phone;
+  if (typeof phone === "string") user.phone = phone;
 
   if (Array.isArray(openingHours)) user.openingHours = openingHours;
 
@@ -367,10 +374,13 @@ export const createCampaign = catchAsync(async (req, res) => {
   if (activeCampaign)
     throw new AppError(httpStatus.BAD_REQUEST, "Already running a campaign");
 
+  const discountValue =
+    discount === undefined || discount === null ? "" : String(discount).trim();
+
   const campaign = await Campaign.create({
     berber: req.user._id,
     name,
-    discount,
+    discount: discountValue,
     type,
     startDate: new Date(startDate),
     endDate: new Date(endDate),
@@ -391,11 +401,11 @@ export const updateCampaign = catchAsync(async (req, res) => {
   if (!campaign) throw new AppError(httpStatus.NOT_FOUND, "Campaign not found");
 
   const { name, discount, type, startDate, endDate } = req.body;
-  campaign.name = name;
-  campaign.discount = discount;
-  campaign.type = type;
-  campaign.startDate = new Date(startDate);
-  campaign.endDate = new Date(endDate);
+  if (name !== undefined) campaign.name = name;
+  if (discount !== undefined) campaign.discount = String(discount).trim();
+  if (type !== undefined) campaign.type = type;
+  if (startDate) campaign.startDate = new Date(startDate);
+  if (endDate) campaign.endDate = new Date(endDate);
   await campaign.save();
 
   sendResponse(res, {
