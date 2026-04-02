@@ -9,18 +9,6 @@ const SHOP_SELECT = "shopName name email avatar shopLogo role";
 const USER_SELECT = "name email avatar";
 const CAMPAIGN_SELECT = "berber name discount type startDate endDate";
 
-// const getCampaignState = (campaign) => {
-//   if (!campaign) return null;
-
-//   const now = new Date();
-//   const start = campaign.startDate ? new Date(campaign.startDate) : null;
-//   const end = campaign.endDate ? new Date(campaign.endDate) : null;
-
-//   if (start && now < start) return "upcoming";
-//   if (end && now > end) return "ended";
-//   return "active";
-// };
-
 const formatLoyalty = (doc) => {
   const row = doc?.toObject ? doc.toObject() : doc;
   if (!row) return row;
@@ -44,32 +32,24 @@ export const createLoyalty = catchAsync(async (req, res) => {
   const { userId } = req.body;
   const shopId = req.user._id;
 
-  if (!userId ) {
-    throw new AppError(400, "userId  are required");
+  if (!userId) {
+    throw new AppError(400, "userId is required");
   }
 
+  const now = new Date();
 
   const activeCampaign = await Campaign.findOne({
-    berber: req.user._id,
-    $or: [
-      {
-        startDate: { $lte: new Date(endDate) },
-        endDate: { $gte: new Date(startDate) },
-      },
-    ],
+    berber: shopId,
+    startDate: { $lte: now },
+    endDate: { $gte: now },
   });
   if (!activeCampaign) {
     throw new AppError(404, "Active campaign not found for this shop");
   }
 
-  // const campaignState = getCampaignState(activeCampaign._id);
-  // if (campaignState !== "active") {
-  //   throw new AppError(400, "Campaign is not active");
-  // }
-
   const doc = await loyalty.findOneAndUpdate(
     { shopId, userId, campaignId: activeCampaign._id },
-    { $inc: { visitCount: 1 }, $set: { campaignState } },
+    { $inc: { visitCount: 1 }, $set: { campaignState: "active" } },
     { new: true, upsert: true },
   );
 
