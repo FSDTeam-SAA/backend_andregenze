@@ -3,6 +3,7 @@ import catchAsync from "../utils/catchAsync.js";
 import httpStatus from "http-status";
 import AppError from "../errors/AppError.js";
 import sendResponse from "../utils/sendResponse.js";
+import { sendEmail, sendMessageTemplate } from "../utils/sendEmail.js";
 
 export const createContactUs = catchAsync(async (req, res) => {
   const { name, email, subject, message } = req.body;
@@ -56,13 +57,21 @@ export const deleteContactUsById = catchAsync(async (req, res) => {
 
 export const createWebContactUs = catchAsync(async (req, res) => {
   const { name, lastName, phone, email, message } = req.body;
-  const contactUs = await ContactUs.create({
-    name,
-    lastName,
-    phone,
-    email,
-    message,
-  });
+
+const contactUs = await ContactUs.create({
+  name,
+  lastName,
+  email,
+  message,
+  ...(phone && { phone }),
+});
+
+  await sendEmail(
+    process.env.CONTACT_FORM_TO,
+    "New Beardfriends contact request",
+    sendMessageTemplate({ email, name, phone, message })
+  );
+
   sendResponse(res, {
     statusCode: httpStatus.OK,
     success: true,
