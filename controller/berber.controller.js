@@ -1,6 +1,7 @@
 import AppError from "../errors/AppError.js";
 import { Campaign } from "../model/campaign.model.js";
 import { Contest } from "../model/contest.model.js";
+import { loyalty } from "../model/loylalityPoint.model.js";
 import { Participation } from "../model/participation.model.js";
 import { Reservation } from "../model/reservation.model.js";
 import { User } from "../model/user.model.js";
@@ -433,20 +434,54 @@ export const getCampaignStats = catchAsync(async (req, res) => {
   const campaign = await Campaign.findOne({ _id: id, berber: req.user._id });
   if (!campaign) throw new AppError(httpStatus.NOT_FOUND, "Campaign not found");
 
-  // Compute successRate if needed (e.g., (redeemed / total) * 100)
-  campaign.stats.successRate =
-    Math.round(
-      (campaign.stats.stampsPerMonth.reduce((sum, m) => sum + m.count, 0) /
-        (campaign.totalStamps * campaign.currentMembers)) *
-        100,
-    ) || 0;
-  campaign.stats.currentMembers = campaign.members.length;
+  const summary = await loyalty.aggregate([
+    {
+      $match: {
+        shopId: req.user._id,
+        campaignId: campaign._id,
+      },
+    },
+    {
+      $group: {
+        _id: "$campaignId",
+        currentMembers: { $sum: 1 },
+        totalVisits: { $sum: "$visitCount" },
+        totalGiftPoints: { $sum: "$totalGiftPoints" },
+      },
+    },
+  ]);
+
+  const aggregated = summary[0] || {
+    currentMembers: 0,
+    totalVisits: 0,
+    totalGiftPoints: 0,
+  };
+
+  const totalStampsCollected =
+    aggregated.totalGiftPoints * campaign.totalStamps + aggregated.totalVisits;
+  const successRate =
+    aggregated.currentMembers > 0
+      ? Math.round(
+          (totalStampsCollected /
+            (campaign.totalStamps * aggregated.currentMembers)) *
+            100,
+        )
+      : 0;
+
+  const stats = {
+    ...(campaign.stats?.toObject ? campaign.stats.toObject() : campaign.stats),
+    currentMembers: aggregated.currentMembers,
+    totalVisits: aggregated.totalVisits,
+    totalGiftPoints: aggregated.totalGiftPoints,
+    totalStampsCollected,
+    successRate,
+  };
 
   sendResponse(res, {
     statusCode: httpStatus.OK,
     success: true,
     message: "Stats fetched",
-    data: campaign.stats,
+    data: stats,
   });
 });
 

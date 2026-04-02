@@ -1,11 +1,25 @@
 import mongoose from "mongoose";
 import AppError from "../errors/AppError.js";
 import { loyalty } from "../model/loylalityPoint.model.js";
+import { Campaign } from "../model/campaign.model.js";
 import catchAsync from "../utils/catchAsync.js";
 import sendResponse from "../utils/sendResponse.js";
 
 const SHOP_SELECT = "shopName name email avatar shopLogo role";
 const USER_SELECT = "name email avatar";
+const CAMPAIGN_SELECT = "berber name discount type startDate endDate";
+
+// const getCampaignState = (campaign) => {
+//   if (!campaign) return null;
+
+//   const now = new Date();
+//   const start = campaign.startDate ? new Date(campaign.startDate) : null;
+//   const end = campaign.endDate ? new Date(campaign.endDate) : null;
+
+//   if (start && now < start) return "upcoming";
+//   if (end && now > end) return "ended";
+//   return "active";
+// };
 
 const formatLoyalty = (doc) => {
   const row = doc?.toObject ? doc.toObject() : doc;
@@ -21,6 +35,8 @@ const formatLoyalty = (doc) => {
     row.userId.profilePicture = row.userId.avatar?.url || "";
   }
 
+  row.campaignState = row.campaignState || null;
+
   return row;
 };
 
@@ -28,13 +44,32 @@ export const createLoyalty = catchAsync(async (req, res) => {
   const { userId } = req.body;
   const shopId = req.user._id;
 
-  if (!userId) {
-    throw new AppError(400, "shopId and userId are required");
+  if (!userId ) {
+    throw new AppError(400, "userId  are required");
   }
 
+
+  const activeCampaign = await Campaign.findOne({
+    berber: req.user._id,
+    $or: [
+      {
+        startDate: { $lte: new Date(endDate) },
+        endDate: { $gte: new Date(startDate) },
+      },
+    ],
+  });
+  if (!activeCampaign) {
+    throw new AppError(404, "Active campaign not found for this shop");
+  }
+
+  // const campaignState = getCampaignState(activeCampaign._id);
+  // if (campaignState !== "active") {
+  //   throw new AppError(400, "Campaign is not active");
+  // }
+
   const doc = await loyalty.findOneAndUpdate(
-    { shopId, userId },
-    { $inc: { visitCount: 1 } },
+    { shopId, userId, campaignId: activeCampaign._id },
+    { $inc: { visitCount: 1 }, $set: { campaignState } },
     { new: true, upsert: true },
   );
 
@@ -51,7 +86,8 @@ export const createLoyalty = catchAsync(async (req, res) => {
   const updatedDoc = await loyalty
     .findById(doc._id)
     .populate("shopId", SHOP_SELECT)
-    .populate("userId", USER_SELECT);
+    .populate("userId", USER_SELECT)
+    .populate("campaignId", CAMPAIGN_SELECT);
 
   sendResponse(res, {
     statusCode: 201,
@@ -62,16 +98,18 @@ export const createLoyalty = catchAsync(async (req, res) => {
 });
 
 export const getAllLoyalties = catchAsync(async (req, res) => {
-  const { shopId, userId } = req.query;
+  const { shopId, userId, campaignId } = req.query;
 
   const filter = {};
   if (shopId) filter.shopId = shopId;
   if (userId) filter.userId = userId;
+  if (campaignId) filter.campaignId = campaignId;
 
   const docs = await loyalty
     .find(filter)
     .populate("shopId", SHOP_SELECT)
     .populate("userId", USER_SELECT)
+    .populate("campaignId", CAMPAIGN_SELECT)
     .sort({ createdAt: -1 });
 
   sendResponse(res, {
@@ -88,7 +126,8 @@ export const getLoyaltyById = catchAsync(async (req, res) => {
   const doc = await loyalty
     .findById(id)
     .populate("shopId", SHOP_SELECT)
-    .populate("userId", USER_SELECT);
+    .populate("userId", USER_SELECT)
+    .populate("campaignId", CAMPAIGN_SELECT);
 
   if (!doc) throw new AppError(404, "Loyalty not found");
 
@@ -115,7 +154,7 @@ export const deleteLoyalty = catchAsync(async (req, res) => {
 });
 
 export const getShopWiseLoyaltyCount = catchAsync(async (req, res, next) => {
-  const { shopId } = req.query;
+  const { shopId, campaignId } = req.query;
 
   if (!shopId) {
     throw new AppError(400, "shopId query is required");
@@ -125,13 +164,17 @@ export const getShopWiseLoyaltyCount = catchAsync(async (req, res, next) => {
     return next(new AppError("Invalid shopId", 400));
   }
 
+  const query = {
+    userId: req.user._id,
+    shopId: new mongoose.Types.ObjectId(shopId),
+  };
+  if (campaignId) query.campaignId = campaignId;
+
   const result = await loyalty
-    .findOne({
-      userId: req.user._id,
-      shopId: new mongoose.Types.ObjectId(shopId),
-    })
+    .findOne(query)
     .populate("shopId", SHOP_SELECT)
-    .populate("userId", USER_SELECT);
+    .populate("userId", USER_SELECT)
+    .populate("campaignId", CAMPAIGN_SELECT);
 
   sendResponse(res, {
     statusCode: 200,
@@ -153,7 +196,8 @@ export const getUserLoyaltyPointsShopWise = catchAsync(async (req, res, next) =>
   const loyaltyDocs = await loyalty
     .find({ userId: uid })
     .populate("shopId", SHOP_SELECT)
-    .populate("userId", USER_SELECT);
+    .populate("userId", USER_SELECT)
+    .populate("campaignId", CAMPAIGN_SELECT);
 
   sendResponse(res, {
     statusCode: 200,
