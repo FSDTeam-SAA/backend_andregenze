@@ -430,7 +430,8 @@ export const updateCampaign = catchAsync(async (req, res) => {
 });
 
 export const getMyCampaigns = catchAsync(async (req, res) => {
-  const campaigns = await Campaign.find({ berber: req.user._id })
+  let berber = req.query.shopId || req.user._id;
+  const campaigns = await Campaign.find({ berber: berber })
     .populate("members", "name avatar")
     .sort({ endDate: -1 });
   sendResponse(res, {

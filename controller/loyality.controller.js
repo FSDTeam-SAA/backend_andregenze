@@ -4,6 +4,7 @@ import { loyalty } from "../model/loylalityPoint.model.js";
 import { Campaign } from "../model/campaign.model.js";
 import catchAsync from "../utils/catchAsync.js";
 import sendResponse from "../utils/sendResponse.js";
+import { io } from "../server.js";
 
 const SHOP_SELECT = "shopName name email avatar shopLogo role";
 const USER_SELECT = "name email avatar";
@@ -72,6 +73,8 @@ export const createLoyalty = catchAsync(async (req, res) => {
     .populate("shopId", SHOP_SELECT)
     .populate("userId", USER_SELECT)
     .populate("campaignId", CAMPAIGN_SELECT);
+
+  io.to(`chat_${userId}`).emit("loyaltyUpdated", formatLoyalty(updatedDoc));
 
   sendResponse(res, {
     statusCode: 201,

@@ -13,6 +13,6 @@ router.get("/contests/:id", getContestById);
 router.put("/contests/:id", updateContest);
 router.get("/users", allUsersAndBerbers);
 router.post("/block-user/:userId", updateUserStatus);
-router.delete("/users/:id", deleteUser);
+router.delete("/users/:userId", deleteUser);
 
 export default router;
