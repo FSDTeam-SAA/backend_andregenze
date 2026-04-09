@@ -9,7 +9,10 @@ import { Review } from "../model/review.model.js";
 import { Reservation } from "../model/reservation.model.js";
 import { Participation } from "../model/participation.model.js";
 import { loyalty } from "../model/loylalityPoint.model.js";
-import { getAvailableSlotsForDays, isSlotAvailable } from "../utils/slotService.js";
+import {
+  getAvailableSlotsForDays,
+  isSlotAvailable,
+} from "../utils/slotService.js";
 
 const DEFAULT_TZ = "Asia/Dhaka";
 
@@ -172,17 +175,13 @@ export const updateProfile = catchAsync(async (req, res) => {
 
   // Existing avatar upload
   if (req.files?.avatar) {
-    const upload = await uploadOnCloudinary(req.files.avatar[0], {
-      baseUrl: `${req.protocol}://${req.get("host")}`,
-    });
+    const upload = await uploadOnCloudinary(req.files.avatar[0].buffer);
     user.avatar = { public_id: upload.public_id, url: upload.secure_url };
   }
 
   // New: shopLogo (single)
   if (req.files?.shopLogo) {
-    const upload = await uploadOnCloudinary(req.files.shopLogo[0], {
-      baseUrl: `${req.protocol}://${req.get("host")}`,
-    });
+    const upload = await uploadOnCloudinary(req.files.shopLogo[0].buffer);
     user.shopLogo = { public_id: upload.public_id, url: upload.secure_url };
   }
 
@@ -191,11 +190,7 @@ export const updateProfile = catchAsync(async (req, res) => {
     const uploads = await Promise.all(
       req.files.portfolioImages
         .slice(0, 10)
-        .map((file) =>
-          uploadOnCloudinary(file, {
-            baseUrl: `${req.protocol}://${req.get("host")}`,
-          }),
-        ),
+        .map((file) => uploadOnCloudinary(file.buffer)),
     );
     const newImages = uploads.map((upload, i) => ({
       public_id: upload.public_id,
@@ -291,9 +286,8 @@ export const searchBerbers = catchAsync(async (req, res) => {
   const sortBy = (req.query.sortBy || "distance").trim();
   const distanceKm = Number(req.query.distance || 50);
 
-  const languagesRaw = req.query.languages; // "Bangla,English"
-  const paymentsRaw = req.query.payments || req.query.acceptedPayments; // "cash,bank_card"
-
+  const languagesRaw = req.query.languages;
+  const paymentsRaw = req.query.payments || req.query.acceptedPayments;
   const openNow = req.query.openNow === "true";
 
   const userLat = req.query.userLat || req.query.lat;
@@ -310,30 +304,59 @@ export const searchBerbers = catchAsync(async (req, res) => {
     "distance" in req.query ||
     "sortBy" in req.query;
 
+  const useGeo = Boolean(userLat && userLng);
+
   if (!hasFilters) {
     const berbers = await User.find(baseFilter).limit(20).lean();
 
     const berberIds = berbers.map((b) => b._id);
-    const avgRatings = await Review.aggregate([
-      { $match: { berber: { $in: berberIds } } },
-      { $group: { _id: "$berber", avgRating: { $avg: "$rating" } } },
+
+    const ratings = await Review.aggregate([
+      {
+        $match: {
+          berber: { $in: berberIds },
+        },
+      },
+      {
+        $group: {
+          _id: "$berber",
+          avgRating: { $avg: "$rating" },
+          totalReviews: { $sum: 1 },
+        },
+      },
       {
         $project: {
           _id: 0,
           berber: "$_id",
           avgRating: { $round: ["$avgRating", 1] },
+          totalReviews: 1,
         },
       },
     ]);
 
     const ratingMap = new Map(
-      avgRatings.map((r) => [r.berber.toString(), r.avgRating]),
+      ratings.map((r) => [
+        r.berber.toString(),
+        {
+          avgRating: r.avgRating,
+          totalReviews: r.totalReviews,
+        },
+      ])
     );
-    const results = berbers.map((b) => ({
-      ...b,
-      avgRating: ratingMap.get(b._id.toString()) || 0,
-      distance: null,
-    }));
+
+    const results = berbers.map((b) => {
+      const ratingData = ratingMap.get(b._id.toString()) || {
+        avgRating: 0,
+        totalReviews: 0,
+      };
+
+      return {
+        ...b,
+        avgRating: ratingData.avgRating,
+        totalReviews: ratingData.totalReviews,
+        distance: useGeo && b.calcDistance ? Math.round(b.calcDistance) : null,
+      };
+    });
 
     return sendResponse(res, {
       statusCode: httpStatus.OK,
@@ -344,7 +367,6 @@ export const searchBerbers = catchAsync(async (req, res) => {
   }
 
   const pipeline = [];
-  const useGeo = Boolean(userLat && userLng);
 
   if (useGeo) {
     pipeline.push({
@@ -381,7 +403,14 @@ export const searchBerbers = catchAsync(async (req, res) => {
       .split(",")
       .map((s) => s.trim())
       .filter(Boolean);
-    if (langs.length) pipeline.push({ $match: { languages: { $in: langs } } });
+
+    if (langs.length) {
+      pipeline.push({
+        $match: {
+          languages: { $in: langs },
+        },
+      });
+    }
   }
 
   if (paymentsRaw) {
@@ -389,11 +418,16 @@ export const searchBerbers = catchAsync(async (req, res) => {
       .split(",")
       .map((s) => s.trim())
       .filter(Boolean);
-    if (pays.length)
-      pipeline.push({ $match: { acceptedPayments: { $in: pays } } });
+
+    if (pays.length) {
+      pipeline.push({
+        $match: {
+          acceptedPayments: { $in: pays },
+        },
+      });
+    }
   }
 
-  // ---- openNow filter (safe for "9:00" and "10:00") ----
   let openNowDebug = null;
 
   if (openNow) {
@@ -527,42 +561,71 @@ export const searchBerbers = catchAsync(async (req, res) => {
   }
 
   const sortStage = {};
-  if (sortBy === "distance" && useGeo) sortStage.calcDistance = 1;
-  else sortStage.createdAt = -1;
+  if (sortBy === "distance" && useGeo) {
+    sortStage.calcDistance = 1;
+  } else {
+    sortStage.createdAt = -1;
+  }
 
-  pipeline.push({ $sort: sortStage }, { $limit: 20 });
+  pipeline.push({ $sort: sortStage });
+  pipeline.push({ $limit: 20 });
 
   const berbers = await User.aggregate(pipeline);
 
   const berberIds = berbers.map((b) => b._id);
-  const avgRatings = await Review.aggregate([
-    { $match: { berber: { $in: berberIds } } },
-    { $group: { _id: "$berber", avgRating: { $avg: "$rating" } } },
+
+  const ratingStats = await Review.aggregate([
+    {
+      $match: {
+        berber: { $in: berberIds },
+      },
+    },
+    {
+      $group: {
+        _id: "$berber",
+        avgRating: { $avg: "$rating" },
+        totalReviews: { $sum: 1 },
+      },
+    },
     {
       $project: {
         _id: 0,
         berber: "$_id",
         avgRating: { $round: ["$avgRating", 1] },
+        totalReviews: 1,
       },
     },
   ]);
 
   const ratingMap = new Map(
-    avgRatings.map((r) => [r.berber.toString(), r.avgRating]),
+    ratingStats.map((r) => [
+      r.berber.toString(),
+      {
+        avgRating: r.avgRating,
+        totalReviews: r.totalReviews,
+      },
+    ])
   );
 
-  const results = berbers.map((b) => ({
-    ...b,
-    avgRating: ratingMap.get(b._id.toString()) || 0,
-    distance: useGeo ? Math.round(b.calcDistance) : null,
-  }));
+  const results = berbers.map((b) => {
+    const ratingData = ratingMap.get(b._id.toString()) || {
+      avgRating: 0,
+      totalReviews: 0,
+    };
+
+    return {
+      ...b,
+      avgRating: ratingData.avgRating,
+      totalReviews: ratingData.totalReviews,
+      distance: useGeo && b.calcDistance ? Math.round(b.calcDistance) : null,
+    };
+  });
 
   return sendResponse(res, {
     statusCode: httpStatus.OK,
     success: true,
     message: "Berbers fetched",
     data: results,
-    // optional debug so you can see what's happening (remove later)
     debug: openNow ? { openNowDebug } : undefined,
   });
 });
@@ -570,7 +633,7 @@ export const searchBerbers = catchAsync(async (req, res) => {
 export const getBerber = catchAsync(async (req, res) => {
   const { id } = req.params;
   const daysToFetch = req.query.days || 7; // Default 7 days, can be customized
-  
+
   const berber = await User.findById(id);
   if (!berber) throw new AppError(httpStatus.NOT_FOUND, "Berber not found");
 
@@ -580,12 +643,12 @@ export const getBerber = catchAsync(async (req, res) => {
     availableSlots = await getAvailableSlotsForDays(
       berber,
       parseInt(daysToFetch),
-      Reservation
+      Reservation,
     );
   }
 
   const response = berber.toObject ? berber.toObject() : berber;
-  
+
   sendResponse(res, {
     statusCode: httpStatus.OK,
     success: true,
@@ -896,7 +959,9 @@ export const getAllBerbersWeb = catchAsync(async (req, res) => {
 });
 
 export const allUser = catchAsync(async (req, res) => {
-  const users = await User.find({role: "user"}).select("-password -refreshToken -verificationInfo -password_reset_token");
+  const users = await User.find({ role: "user" }).select(
+    "-password -refreshToken -verificationInfo -password_reset_token",
+  );
   sendResponse(res, {
     statusCode: httpStatus.OK,
     success: true,
@@ -904,7 +969,6 @@ export const allUser = catchAsync(async (req, res) => {
     data: users,
   });
 });
-
 
 export const getAdminDashboard = catchAsync(async (req, res) => {
   // year selector like your UI
@@ -957,7 +1021,9 @@ export const getAdminDashboard = catchAsync(async (req, res) => {
 
     // Top cities for berbers/vendors
     User.aggregate([
-      { $match: { role: "berber", "address.city": { $exists: true, $ne: "" } } },
+      {
+        $match: { role: "berber", "address.city": { $exists: true, $ne: "" } },
+      },
       { $group: { _id: "$address.city", count: { $sum: 1 } } },
       { $sort: { count: -1 } },
       { $limit: 8 },
@@ -967,7 +1033,12 @@ export const getAdminDashboard = catchAsync(async (req, res) => {
     // Accepted payments distribution (berbers)
     User.aggregate([
       { $match: { role: "berber" } },
-      { $unwind: { path: "$acceptedPayments", preserveNullAndEmptyArrays: false } },
+      {
+        $unwind: {
+          path: "$acceptedPayments",
+          preserveNullAndEmptyArrays: false,
+        },
+      },
       { $group: { _id: "$acceptedPayments", count: { $sum: 1 } } },
       { $sort: { count: -1 } },
       { $project: { _id: 0, method: "$_id", count: 1 } },
@@ -992,7 +1063,7 @@ export const getAdminDashboard = catchAsync(async (req, res) => {
           count: { $sum: 1 },
         },
       },
-      { $sort: { "_id": 1 } },
+      { $sort: { _id: 1 } },
       { $project: { _id: 0, month: "$_id", count: 1 } },
     ]),
 
@@ -1005,7 +1076,7 @@ export const getAdminDashboard = catchAsync(async (req, res) => {
           count: { $sum: 1 },
         },
       },
-      { $sort: { "_id": 1 } },
+      { $sort: { _id: 1 } },
       { $project: { _id: 0, month: "$_id", count: 1 } },
     ]),
 
@@ -1018,7 +1089,9 @@ export const getAdminDashboard = catchAsync(async (req, res) => {
 
     // Latest berbers
     User.find({ role: "berber" })
-      .select("name email role vendorStatus status shopName shopLogo.url createdAt")
+      .select(
+        "name email role vendorStatus status shopName shopLogo.url createdAt",
+      )
       .sort({ createdAt: -1 })
       .limit(6)
       .lean(),
@@ -1034,22 +1107,26 @@ export const getAdminDashboard = catchAsync(async (req, res) => {
   };
 
   // Normalize status into a fixed object (handy for KPI tiles)
-  const status = ["active", "inactive", "blocked", "deleted"].reduce((acc, s) => {
-    acc[s] = 0;
-    return acc;
-  }, {});
+  const status = ["active", "inactive", "blocked", "deleted"].reduce(
+    (acc, s) => {
+      acc[s] = 0;
+      return acc;
+    },
+    {},
+  );
   for (const row of statusAgg) status[row.status] = row.count;
 
   // Optional: quick growth numbers (last 7 and 30 days)
   const now = new Date();
   const daysAgo = (n) => new Date(now.getTime() - n * 24 * 60 * 60 * 1000);
 
-  const [newUsers7d, newUsers30d, newBerbers7d, newBerbers30d] = await Promise.all([
-    User.countDocuments({ createdAt: { $gte: daysAgo(7) } }),
-    User.countDocuments({ createdAt: { $gte: daysAgo(30) } }),
-    User.countDocuments({ role: "berber", createdAt: { $gte: daysAgo(7) } }),
-    User.countDocuments({ role: "berber", createdAt: { $gte: daysAgo(30) } }),
-  ]);
+  const [newUsers7d, newUsers30d, newBerbers7d, newBerbers30d] =
+    await Promise.all([
+      User.countDocuments({ createdAt: { $gte: daysAgo(7) } }),
+      User.countDocuments({ createdAt: { $gte: daysAgo(30) } }),
+      User.countDocuments({ role: "berber", createdAt: { $gte: daysAgo(7) } }),
+      User.countDocuments({ role: "berber", createdAt: { $gte: daysAgo(30) } }),
+    ]);
 
   return sendResponse(res, {
     statusCode: 200,
