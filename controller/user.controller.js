@@ -924,6 +924,8 @@ export const getAllBerbersWeb = catchAsync(async (req, res) => {
     .limit(20)
     .lean();
 
+    console.log(berbers);
+
   const berberIds = berbers.map((b) => b._id);
   const avgRatings = await Review.aggregate([
     { $match: { berber: { $in: berberIds } } },
