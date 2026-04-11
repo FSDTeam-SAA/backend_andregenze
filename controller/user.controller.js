@@ -921,9 +921,6 @@ export const getCurrentContest = catchAsync(async (req, res) => {
 
 export const getAllBerbersWeb = catchAsync(async (req, res) => {
   const berbers = await User.find({ role: "berber" })
-    .select(
-      "shopName avatar languages acceptedPayments address.location address.city portfolioImages",
-    )
     .limit(20)
     .lean();
 
