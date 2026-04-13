@@ -63,7 +63,7 @@ export const createLoyalty = catchAsync(async (req, res) => {
       { _id: doc._id },
       {
         $inc: { totalGiftPoints: 1 },
-        $set: { visitCount: 0 },
+        $set: { visitCount: 1 },
       },
     );
   }

@@ -444,9 +444,30 @@ export const getMyCampaigns = catchAsync(async (req, res) => {
 
 export const getCampaignStats = catchAsync(async (req, res) => {
   const { id } = req.params;
-  const requestedYear = req.query.year ? Number.parseInt(req.query.year, 10) : new Date().getFullYear();
+  const currentYear = new Date().getFullYear();
+  const requestedYear = req.query.year ? Number.parseInt(req.query.year, 10) : currentYear;
   const campaign = await Campaign.findOne({ _id: id, berber: req.user._id });
   if (!campaign) throw new AppError(httpStatus.NOT_FOUND, "Campaign not found");
+
+  // Get all available years with data
+  const availableYears = await loyalty.aggregate([
+    {
+      $match: {
+        shopId: req.user._id,
+        campaignId: campaign._id,
+      },
+    },
+    {
+      $group: {
+        _id: { $year: "$createdAt" },
+      },
+    },
+    {
+      $sort: { _id: -1 },
+    },
+  ]);
+
+  const yearsWithData = availableYears.map(item => item._id).sort((a, b) => b - a);
 
   const summary = await loyalty.aggregate([
     {
@@ -585,6 +606,7 @@ export const getCampaignStats = catchAsync(async (req, res) => {
     success: true,
     message: "Stats fetched",
     data: {
+      availableYears: yearsWithData,
       campaign: {
         _id: campaign._id,
         name: campaign.name,
