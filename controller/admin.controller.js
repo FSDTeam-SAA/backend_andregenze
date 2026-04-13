@@ -40,10 +40,10 @@ export const getContests = catchAsync(async (req, res) => {
   const contests = await Contest.find()
     .populate({
       path: "participants",
-      populate: { path: "user", select: "name avatar" },
+      populate: { path: "user", select: "name avatar status" },
       options: { sort: { votes: -1 } }, // Leaderboard
     })
-    .populate("winners", "photo votes submittedAt user")
+    .populate("winners", "photo votes submittedAt user status")
     .sort({ startDate: -1 });
 
   sendResponse(res, {
@@ -57,10 +57,10 @@ export const getContestById = catchAsync(async (req, res) => {
   const contests = await Contest.findById(req.params.id)
     .populate({
       path: "participants",
-      populate: { path: "user", select: "name avatar" },
+      populate: { path: "user", select: "name avatar status" },
       options: { sort: { votes: -1 } }, // Leaderboard
     })
-    .populate("winners", "photo votes submittedAt user")
+    .populate("winners", "photo votes submittedAt user status")
     .sort({ startDate: -1 });
 
   sendResponse(res, {
