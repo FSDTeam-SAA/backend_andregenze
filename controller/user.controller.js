@@ -895,9 +895,6 @@ export const getCurrentContest = catchAsync(async (req, res) => {
     options: { sort: { votes: -1 } },
   });
 
-  if (!contest) {
-    throw new AppError(httpStatus.NOT_FOUND, "No active contest");
-  }
 
   let myParticipation = null;
 
