@@ -52,11 +52,21 @@ export const createLoyalty = catchAsync(async (req, res) => {
     throw new AppError(404, "Active campaign not found for this shop");
   }
 
-  const doc = await loyalty.findOneAndUpdate(
-    { shopId, userId, campaignId: activeCampaign._id },
-    { $inc: { visitCount: 1 }, $set: { campaignState: "active" } },
-    { new: true, upsert: true },
-  );
+  const loyaltyQuery = { shopId, userId, campaignId: activeCampaign._id };
+  const existingLoyalty = await loyalty.findOne(loyaltyQuery);
+
+  const doc = existingLoyalty
+    ? await loyalty.findOneAndUpdate(
+        loyaltyQuery,
+        { $inc: { visitCount: 1 }, $set: { campaignState: "active" } },
+        { new: true },
+      )
+    : await loyalty.create({
+        ...loyaltyQuery,
+        visitCount: 2,
+        totalGiftPoints: 0,
+        campaignState: "active",
+      });
 
   if (doc.visitCount > 10) {
     await loyalty.updateOne(
