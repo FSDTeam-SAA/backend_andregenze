@@ -11,7 +11,7 @@ const loyaltySchema = new Schema(
       default: "active",
     },
     totalGiftPoints: { type: Number, default: 0 },
-    visitCount: { type: Number, default: 0 },
+    visitCount: { type: Number, default: 1 },
   },
   { timestamps: true }
 );
