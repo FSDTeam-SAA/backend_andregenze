@@ -413,6 +413,75 @@ export const verifyOTP = catchAsync(async (req, res, next) => {
   });
 });
 
+export const resendOTP = catchAsync(async (req, res, next) => {
+  const { email, type = "verification" } = req.body;
+
+  if (!email) {
+    return next(new AppError(400, "Email is required"));
+  }
+
+  if (!["verification", "forgot-password"].includes(type)) {
+    return next(
+      new AppError(400, "Type must be either verification or forgot-password")
+    );
+  }
+
+  const user = await User.findOne({ email });
+  if (!user) {
+    return next(new AppError(404, "User not found"));
+  }
+
+  if (type === "forgot-password") {
+    const otp = generateOTP();
+    const otpPayload = { otp };
+    const otpToken = createToken(
+      otpPayload,
+      process.env.OTP_SECRET,
+      process.env.OTP_EXPIRE
+    );
+
+    user.password_reset_token = otpToken;
+    await user.save();
+
+    try {
+      await sendEmail(user.email, "Reset Password", `Your OTP is ${otp}`);
+    } catch (err) {
+      return next(new AppError(500, "Failed to resend OTP email"));
+    }
+
+    return sendResponse(res, {
+      statusCode: 200,
+      success: true,
+      message: "Forgot password OTP resent successfully",
+      data: { email: user.email, type },
+    });
+  }
+
+  if (user.isEmailVerified) {
+    return next(new AppError(400, "Email is already verified"));
+  }
+
+  const otp = generateVerificationCode().toString();
+  const otpExpiry = Date.now() + 10 * 60 * 1000;
+
+  user.resetPasswordOTP = otp;
+  user.resetPasswordOTPExpiry = otpExpiry;
+  await user.save();
+
+  try {
+    await sendEmail(user.email, otp);
+  } catch (err) {
+    return next(new AppError(500, "Failed to resend OTP email"));
+  }
+
+  sendResponse(res, {
+    statusCode: 200,
+    success: true,
+    message: "OTP resent successfully",
+    data: { email: user.email, type },
+  });
+});
+
 export const changePassword = catchAsync(async (req, res) => {
   const { oldPassword, newPassword } = req.body;
   if (!oldPassword || !newPassword) {
