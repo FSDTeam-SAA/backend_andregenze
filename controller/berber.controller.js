@@ -81,6 +81,7 @@ export const setupBerberProfile = catchAsync(async (req, res) => {
     lat,
     lng,
     address,
+    phone,
   } = req.body;
 
   if (!Array.isArray(services) || services.length === 0) {
@@ -111,6 +112,7 @@ export const setupBerberProfile = catchAsync(async (req, res) => {
   user.shopDescription = shopDescription || "";
 
   user.socialMedia = buildSocialMedia(req.body);
+  if(phone) user.phone = phone;
 
   user.shopName = shopName || "";
   user.staffMembers = Array.isArray(staffMembers) ? staffMembers : [];
