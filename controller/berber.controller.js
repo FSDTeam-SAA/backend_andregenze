@@ -310,7 +310,7 @@ if (req.files?.portfolioImages?.length) {
     newUploads = uploads.map((upload, i) => ({
       public_id: upload.public_id,
       url: upload.secure_url,
-      description: descArr[i] || "",
+      description: "",
     }));
   }
 
