@@ -56,7 +56,7 @@ export const setupBerberProfile = catchAsync(async (req, res) => {
 
   const jsonFields = [
     "socialMedia",
-    "staffMembers",
+    // "staffMembers",
     "openingHours",
     "services",
     "languages",
@@ -115,7 +115,8 @@ export const setupBerberProfile = catchAsync(async (req, res) => {
   if(phone) user.phone = phone;
 
   user.shopName = shopName || "";
-  user.staffMembers = Array.isArray(staffMembers) ? staffMembers : [];
+  // user.staffMembers = Array.isArray(staffMembers) ? staffMembers : [];
+  user.staffMembers = staffMembers ;
   user.openingHours = openingHours;
   user.services = services;
   user.languages = languages;
@@ -201,7 +202,7 @@ export const updateBerberProfile = catchAsync(async (req, res) => {
 
   const jsonFields = [
     "socialMedia",
-    "staffMembers",
+    // "staffMembers",
     "openingHours",
     "services",
     "languages",
@@ -227,6 +228,7 @@ export const updateBerberProfile = catchAsync(async (req, res) => {
     lng,
     address,
     phone,
+    previousImages
   } = req.body;
 
   if (shopDescription !== undefined) user.shopDescription = shopDescription;
@@ -241,7 +243,8 @@ export const updateBerberProfile = catchAsync(async (req, res) => {
 
   if (typeof shopName === "string") user.shopName = shopName;
 
-  if (Array.isArray(staffMembers)) user.staffMembers = staffMembers;
+  // if (Array.isArray(staffMembers)) user.staffMembers = staffMembers;
+  user.staffMembers = staffMembers;
 
   if (typeof phone === "string") user.phone = phone;
 
@@ -280,27 +283,40 @@ export const updateBerberProfile = catchAsync(async (req, res) => {
     };
   }
 
-  if (req.files?.portfolioImages?.length) {
-    const descArr = Array.isArray(portfolioDescriptions)
-      ? portfolioDescriptions
-      : [];
+if (req.files?.portfolioImages?.length) {
+  // 1. Parse previous images from frontend (JSON string)
+  let previousImages = [];
 
+  try {
+    previousImages = req.body.previousImages
+      ? JSON.parse(req.body.previousImages)
+      : [];
+  } catch (err) {
+    previousImages = [];
+  }
+
+  // 3. Upload new images (if any)
+  let newUploads = [];
+
+  if (req.files?.portfolioImages?.length) {
     const uploads = await Promise.all(
-      req.files.portfolioImages
-        .slice(0, 10)
-        .map((file) =>
-          uploadOnCloudinary(file, {
-            baseUrl: `${req.protocol}://${req.get("host")}`,
-          }),
-        ),
+      req.files.portfolioImages.slice(0, 10).map((file) =>
+        uploadOnCloudinary(file, {
+          baseUrl: `${req.protocol}://${req.get("host")}`,
+        })
+      )
     );
 
-    user.portfolioImages = uploads.map((upload, i) => ({
+    newUploads = uploads.map((upload, i) => ({
       public_id: upload.public_id,
       url: upload.secure_url,
       description: descArr[i] || "",
     }));
   }
+
+  // 4. Merge previous + new
+  user.portfolioImages = [...previousImages, ...newUploads];
+}
 
   await user.save();
 
@@ -370,7 +386,12 @@ export const confirmReservation = catchAsync(async (req, res) => {
 
 // Campaign Controllers
 export const createCampaign = catchAsync(async (req, res) => {
-  const { name, discount, type, startDate, endDate } = req.body;
+  let { name, discount, type, startDate, endDate } = req.body;
+
+  startDate = new Date();
+endDate = new Date();
+
+endDate.setFullYear(endDate.getFullYear() + 5);
 
   const user = await User.findById(req.user._id);
   if (user.role !== "berber")
@@ -1042,17 +1063,17 @@ export const getHallOfFameWeb = catchAsync(async (req, res) => {
 });
 
 export const addStuff = catchAsync(async (req, res) => {
-  const { userIds } = req.body;
+  const { staffMembers } = req.body;
   const user = await User.findById(req.user._id);
   if (user.role !== "berber") {
     throw new AppError(httpStatus.FORBIDDEN, "Berber only");
   }
-  const staffMembers = user.staffMembers || [];
-  userIds.forEach((id) => {
-    if (!staffMembers.includes(id)) {
-      staffMembers.push(id);
-    }
-  });
+  // const staffMembers = user.staffMembers || [];
+  // userIds.forEach((id) => {
+  //   if (!staffMembers.includes(id)) {
+  //     staffMembers.push(id);
+  //   }
+  // });
   user.staffMembers = staffMembers;
   await user.save();
   sendResponse(res, {

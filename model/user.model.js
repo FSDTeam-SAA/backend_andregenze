@@ -57,7 +57,8 @@ const userSchema = new Schema(
       tiktok: { type: String },
       web: { type: String },
     },
-    staffMembers: [{ type: Schema.Types.ObjectId, ref: "User" }],
+    // staffMembers: [{ type: Schema.Types.ObjectId, ref: "User" }],
+    staffMembers: {type: Number, default: 0},
     status: {
       type: String,
       enum: ["active", "inactive", "blocked", "deleted"],
