@@ -82,6 +82,7 @@ export const setupBerberProfile = catchAsync(async (req, res) => {
     lng,
     address,
     phone,
+    contactPersonName
   } = req.body;
 
   if (!Array.isArray(services) || services.length === 0) {
@@ -176,6 +177,8 @@ export const setupBerberProfile = catchAsync(async (req, res) => {
     }));
   }
 
+
+
   user.portfolioImages = portfolioImages;
 
   if (!user.address) {
@@ -228,7 +231,8 @@ export const updateBerberProfile = catchAsync(async (req, res) => {
     lng,
     address,
     phone,
-    previousImages
+    previousImages,
+    contactPersonName
   } = req.body;
 
   if (shopDescription !== undefined) user.shopDescription = shopDescription;
@@ -255,6 +259,9 @@ export const updateBerberProfile = catchAsync(async (req, res) => {
   if (Array.isArray(languages)) user.languages = languages;
 
   if (Array.isArray(acceptedPayments)) user.acceptedPayments = acceptedPayments;
+    if (contactPersonName) {
+    user.name = contactPersonName;
+  }
 
   if (!user.address) user.address = {};
 
