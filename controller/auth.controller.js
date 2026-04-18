@@ -3,7 +3,7 @@ import AppError from "../errors/AppError.js";
 import { createToken, verifyToken } from "../utils/authToken.js";
 import catchAsync from "../utils/catchAsync.js";
 import { generateOTP } from "../utils/commonMethod.js";
-import { sendEmail } from "../utils/sendEmail.js";
+import { otpTemplate, sendEmail } from "../utils/sendEmail.js";
 import sendResponse from "../utils/sendResponse.js";
 import QRCode from "qrcode";
 import { User } from "./../model/user.model.js";
@@ -67,7 +67,8 @@ export const register = catchAsync(async (req, res, next) => {
   await user.save();
 
   try {
-    await sendEmail(email, otp);
+    const html =  otpTemplate(name, otp);
+    await sendEmail(email, "Verify your email", html);
   } catch (err) {
     console.log(err);
     return next(new AppError(500, "Failed to send OTP email"));
@@ -107,7 +108,8 @@ export const login = catchAsync(async (req, res) => {
     await user.save();
 
     try {
-      await sendEmail(user.email, otp);
+      const html =  otpTemplate(user.name, otp);
+      await sendEmail(user.email, "Verify your email", html);
     } catch (err) {
       throw new AppError(500, "Failed to send OTP email");
     }
@@ -328,8 +330,9 @@ export const forgetPassword = catchAsync(async (req, res) => {
 
   user.password_reset_token = otpToken;
   await user.save();
+  const html =  otpTemplate(user.name, otp);
 
-  await sendEmail(user.email, "Reset Password", `Your OTP is ${otp}`);
+  await sendEmail(user.email, "Reset Password", html);
 
   sendResponse(res, {
     statusCode: httpStatus.OK,
@@ -444,7 +447,8 @@ export const resendOTP = catchAsync(async (req, res, next) => {
     await user.save();
 
     try {
-      await sendEmail(user.email, "Reset Password", `Your OTP is ${otp}`);
+      const html =  otpTemplate(user.name, otp);
+      await sendEmail(user.email, "Reset Password", html);
     } catch (err) {
       return next(new AppError(500, "Failed to resend OTP email"));
     }
@@ -469,7 +473,8 @@ export const resendOTP = catchAsync(async (req, res, next) => {
   await user.save();
 
   try {
-    await sendEmail(user.email, otp);
+    const html =  otpTemplate(user.name, otp);
+    await sendEmail(user.email, "Verify your email", html);
   } catch (err) {
     return next(new AppError(500, "Failed to resend OTP email"));
   }

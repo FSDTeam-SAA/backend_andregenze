@@ -97,3 +97,46 @@ export const inviteLinkTemplate = ( inviterName, inviteLink ) => {
     </div>
   `;
 };
+
+
+export const otpTemplate = (name, otpCode) => {
+  return `
+  <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 650px; margin: auto; border-radius: 14px; overflow: hidden; background-color: #f9fafb; box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);">
+
+    <div style="background: #1c1c1e; padding: 30px; text-align: center; color: #ffffff;">
+      <h1 style="margin: 0; color: #ffffff;">Verify your account</h1>
+      <p style="margin-top: 6px; opacity: 0.85; color: #ffffff;">
+        Beardfriends Security
+      </p>
+    </div>
+
+    <div style="padding: 30px; background-color: #ffffff;">
+      
+      <p style="font-size: 16px; margin-bottom: 25px;">
+        Hey ${name},
+      </p>
+
+      <p style="font-size: 16px; color: #374151;">
+        use this code to continue:
+      </p>
+
+      <div style="margin: 50px 0; text-align: center;">
+        <div style="display: inline-block; padding: 26px 42px; font-size: 38px; letter-spacing: 16px; font-weight: bold; color: #1c1c1e; background-color: #f3f4f6; border-radius: 14px; border: 2px solid #e5e7eb;">
+          ${otpCode}
+        </div>
+      </div>
+
+      <p style="font-size: 13px; color: #9ca3af; text-align: center;">
+        Didn’t request this? You can ignore this email.
+      </p>
+
+    </div>
+
+    <div style="text-align: center; padding: 15px; font-size: 13px; color: #9ca3af;">
+      &copy; 2026 Beardfriends
+    </div>
+
+  </div>
+  `;
+};
+
