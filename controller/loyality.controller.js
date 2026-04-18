@@ -5,6 +5,7 @@ import { Campaign } from "../model/campaign.model.js";
 import catchAsync from "../utils/catchAsync.js";
 import sendResponse from "../utils/sendResponse.js";
 import { io } from "../server.js";
+import { Notification } from "../model/notification.model.js";
 
 const SHOP_SELECT = "shopName name email avatar shopLogo role";
 const USER_SELECT = "name email avatar";
@@ -84,7 +85,25 @@ export const createLoyalty = catchAsync(async (req, res) => {
     .populate("userId", USER_SELECT)
     .populate("campaignId", CAMPAIGN_SELECT);
 
+
+    const notification = await Notification.create({
+      user: userId,
+      title: "Loyalty Updated",
+      message: `Your loyalty points have been updated for ${updatedDoc.shopId.shopName}. You have collected ${updatedDoc.visitCount} visit(s) and ${updatedDoc.totalGiftPoints} gift point(s).`,
+      type: "loyalty_update",
+    })
+        const notification1 = await Notification.create({
+      user: shopId,
+      title: "Loyalty Updated",
+      message: `Loyalty points for user ${updatedDoc.userId.name} have been updated. They have collected ${updatedDoc.visitCount} visit(s) and ${updatedDoc.totalGiftPoints} gift point(s).`,
+      type: "loyalty_update",
+    })
+
+
   io.to(`chat_${userId}`).emit("loyaltyUpdated", formatLoyalty(updatedDoc));
+
+  io.to(`chat_${shopId}`).emit("Notification", formatLoyalty(notification1));
+  io.to(`chat_${userId}`).emit("Notification", formatLoyalty(notification));
 
   sendResponse(res, {
     statusCode: 201,
