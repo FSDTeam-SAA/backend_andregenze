@@ -259,7 +259,8 @@ export const updateBerberProfile = catchAsync(async (req, res) => {
   if (Array.isArray(languages)) user.languages = languages;
 
   if (Array.isArray(acceptedPayments)) user.acceptedPayments = acceptedPayments;
-    if (contactPersonName) {
+  
+  if (contactPersonName) {
     user.name = contactPersonName;
   }
 
