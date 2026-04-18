@@ -67,6 +67,15 @@ const parseJsonIfString = (value) => {
   }
 };
 
+const normalizeImageField = (value) => {
+  if (!value) return null;
+
+  const image = value.toObject ? value.toObject() : value;
+  const hasImage = Boolean(image?.public_id?.trim() || image?.url?.trim());
+
+  return hasImage ? image : null;
+};
+
 // helper: get day + minutes now; allow overrides for testing
 const getDayAndMinutesNow = (req) => {
   // override for testing:
@@ -804,10 +813,30 @@ export const getMyReservations = catchAsync(async (req, res) => {
   if (status && status !== "all") filter.status = status;
   if (shopId) filter.berber = shopId;
 
-  const reservations = await Reservation.find(filter)
-    .populate("berber", "name shopName avatar services.name services.price")
+  let reservations = await Reservation.find(filter)
+    .populate({
+      path: "berber",
+      select: "name shopName shopLogo avatar services",
+    })
     .populate("user", "name shopName avatar")
     .sort({ date: -1 });
+
+  reservations = reservations.map((reservation) => {
+    const berber = reservation.berber?.toObject
+      ? reservation.berber.toObject()
+      : reservation.berber;
+
+    return {
+      ...reservation.toObject(),
+      berber: berber
+        ? {
+            ...berber,
+            avatar: normalizeImageField(berber.avatar),
+            shopLogo: normalizeImageField(berber.shopLogo),
+          }
+        : null,
+    };
+  });
 
   const reservationsWithPrice = reservations.map((reservation) => {
     if (reservation.price !== undefined && reservation.price !== null) {

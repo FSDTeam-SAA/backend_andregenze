@@ -1,6 +1,14 @@
 import mongoose, { Schema } from "mongoose";
 import bcrypt from "bcryptjs";
 
+const imageSchema = new Schema(
+  {
+    public_id: { type: String, default: "" },
+    url: { type: String, default: "" },
+  },
+  { _id: false },
+);
+
 const userSchema = new Schema(
   {
     name: { type: String, maxlength: 100 },
@@ -26,14 +34,8 @@ const userSchema = new Schema(
     dob: {
       type: Date,
     },
-    avatar: {
-      public_id: { type: String, default: "" },
-      url: { type: String, default: "" },
-    },
-    shopLogo: {
-      public_id: { type: String, default: "" },
-      url: { type: String, default: "" },
-    },
+    avatar: { type: imageSchema, default: null },
+    shopLogo: { type: imageSchema, default: null },
     address2: { type: String },
     address: {
       street: { type: String },
