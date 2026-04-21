@@ -17,7 +17,7 @@ import { protect } from "../middleware/auth.middleware.js";
 import upload from "../middleware/multer.middleware.js";
 
 const router = express.Router();
-
+router.get("/campaigns-web", getMyCampaigns);
 router.use(protect);
 
 // Profile setup
