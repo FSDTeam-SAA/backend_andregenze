@@ -1025,8 +1025,8 @@ export const getAdminDashboard = catchAsync(async (req, res) => {
     latestUsers,
     latestBerbers,
   ] = await Promise.all([
-    User.countDocuments({}),
-    User.countDocuments({ status: "active" }),
+    User.countDocuments({role:"user"}),
+    User.countDocuments({ status: "active", role: "user" }),
     User.countDocuments({ role: "berber" }),
     loyalty.countDocuments({}),
     User.countDocuments({ role: "admin" }),
@@ -1035,6 +1035,7 @@ export const getAdminDashboard = catchAsync(async (req, res) => {
     User.countDocuments({ role: "berber", vendorStatus: "verified" }),
 
     User.aggregate([
+      { $match: { role: "user" } },
       { $group: { _id: "$status", count: { $sum: 1 } } },
       { $project: { _id: 0, status: "$_id", count: 1 } },
     ]),
