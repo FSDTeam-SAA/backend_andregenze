@@ -1184,10 +1184,10 @@ export const getAdminDashboard = catchAsync(async (req, res) => {
         totalUsers,
         totalActiveUsers,
         totalBerbers,
-        totalPoints: totalPoints.grandTotal,
+        totalPoints: totalPoints.length > 0 ? totalPoints[0].grandTotal : 0,
         totalAdmins,
         vendorPending,
-        vendorVerified,
+        vendorVerified: vendorVerified.length,
 
         status, // {active,inactive,blocked,deleted}
 
