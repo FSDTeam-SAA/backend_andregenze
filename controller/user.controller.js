@@ -13,6 +13,7 @@ import {
   getAvailableSlotsForDays,
   isSlotAvailable,
 } from "../utils/slotService.js";
+import { Campaign } from "../model/campaign.model.js";
 
 const DEFAULT_TZ = "Asia/Dhaka";
 
@@ -39,8 +40,8 @@ const normalizeTimeString = (timeStr) => {
 const buildSocialMedia = (payload = {}) => {
   const source =
     payload.socialMedia &&
-    typeof payload.socialMedia === "object" &&
-    !Array.isArray(payload.socialMedia)
+      typeof payload.socialMedia === "object" &&
+      !Array.isArray(payload.socialMedia)
       ? payload.socialMedia
       : {};
 
@@ -830,10 +831,10 @@ export const getMyReservations = catchAsync(async (req, res) => {
       ...reservation.toObject(),
       berber: berber
         ? {
-            ...berber,
-            avatar: normalizeImageField(berber.avatar),
-            shopLogo: normalizeImageField(berber.shopLogo),
-          }
+          ...berber,
+          avatar: normalizeImageField(berber.avatar),
+          shopLogo: normalizeImageField(berber.shopLogo),
+        }
         : null,
     };
   });
@@ -951,7 +952,7 @@ export const getAllBerbersWeb = catchAsync(async (req, res) => {
     .limit(20)
     .lean();
 
-    console.log(berbers);
+  console.log(berbers);
 
   const berberIds = berbers.map((b) => b._id);
   const avgRatings = await Review.aggregate([
@@ -1025,14 +1026,31 @@ export const getAdminDashboard = catchAsync(async (req, res) => {
     latestUsers,
     latestBerbers,
   ] = await Promise.all([
-    User.countDocuments({role:"user"}),
+    User.countDocuments({ role: "user" }),
     User.countDocuments({ status: "active", role: "user" }),
     User.countDocuments({ role: "berber" }),
-    loyalty.countDocuments({}),
+    loyalty.aggregate([
+      {
+        $group: {
+          _id: null,
+          grandTotal: {
+            $sum: {
+              $add: [
+                "$visitCount",
+                { $multiply: ["$totalGiftPoints", 10] }
+              ]
+            }
+          }
+        }
+      }
+    ]),
     User.countDocuments({ role: "admin" }),
 
     User.countDocuments({ role: "berber", vendorStatus: "pending" }),
-    User.countDocuments({ role: "berber", vendorStatus: "verified" }),
+    // User.countDocuments({ role: "berber", vendorStatus: "verified" }),
+    Campaign.distinct("berber", {
+      endDate: { $gte: new Date() }
+    }),
 
     User.aggregate([
       { $match: { role: "user" } },
@@ -1166,7 +1184,7 @@ export const getAdminDashboard = catchAsync(async (req, res) => {
         totalUsers,
         totalActiveUsers,
         totalBerbers,
-        totalPoints,
+        totalPoints: totalPoints.grandTotal,
         totalAdmins,
         vendorPending,
         vendorVerified,
