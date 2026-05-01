@@ -9,6 +9,7 @@ import { Review } from "../model/review.model.js";
 import { Reservation } from "../model/reservation.model.js";
 import { Participation } from "../model/participation.model.js";
 import { loyalty } from "../model/loylalityPoint.model.js";
+import { loyaltyPoint } from "../model/loyalty.model.js";
 import {
   getAvailableSlotsForDays,
   isSlotAvailable,
@@ -1023,26 +1024,20 @@ export const getAdminDashboard = catchAsync(async (req, res) => {
     languagesAgg,
     regsByMonthAgg,
     berbersByMonthAgg,
+    loyaltyPointsByMonthAgg,
     latestUsers,
     latestBerbers,
   ] = await Promise.all([
     User.countDocuments({ role: "user" }),
     User.countDocuments({ status: "active", role: "user" }),
     User.countDocuments({ role: "berber" }),
-    loyalty.aggregate([
+    loyaltyPoint.aggregate([
       {
         $group: {
           _id: null,
-          grandTotal: {
-            $sum: {
-              $add: [
-                "$visitCount",
-                { $multiply: ["$totalGiftPoints", 10] }
-              ]
-            }
-          }
-        }
-      }
+          grandTotal: { $sum: 1 },
+        },
+      },
     ]),
     User.countDocuments({ role: "admin" }),
 
@@ -1101,7 +1096,7 @@ export const getAdminDashboard = catchAsync(async (req, res) => {
 
     // Registrations by month for selected year (all roles)
     User.aggregate([
-      { $match: { createdAt: { $gte: start, $lt: end } } },
+      { $match: {role: "user", createdAt: { $gte: start, $lt: end } } },
       {
         $group: {
           _id: { $month: "$createdAt" },
@@ -1115,6 +1110,19 @@ export const getAdminDashboard = catchAsync(async (req, res) => {
     // Berber registrations by month for selected year
     User.aggregate([
       { $match: { role: "berber", createdAt: { $gte: start, $lt: end } } },
+      {
+        $group: {
+          _id: { $month: "$createdAt" },
+          count: { $sum: 1 },
+        },
+      },
+      { $sort: { _id: 1 } },
+      { $project: { _id: 0, month: "$_id", count: 1 } },
+    ]),
+
+    // Loyalty points by month for selected year
+    loyaltyPoint.aggregate([
+      { $match: { createdAt: { $gte: start, $lt: end } } },
       {
         $group: {
           _id: { $month: "$createdAt" },
@@ -1167,8 +1175,8 @@ export const getAdminDashboard = catchAsync(async (req, res) => {
 
   const [newUsers7d, newUsers30d, newBerbers7d, newBerbers30d] =
     await Promise.all([
-      User.countDocuments({ createdAt: { $gte: daysAgo(7) } }),
-      User.countDocuments({ createdAt: { $gte: daysAgo(30) } }),
+      User.countDocuments({role: "user", createdAt: { $gte: daysAgo(7) } }),
+      User.countDocuments({ role: "user", createdAt: { $gte: daysAgo(30) } }),
       User.countDocuments({ role: "berber", createdAt: { $gte: daysAgo(7) } }),
       User.countDocuments({ role: "berber", createdAt: { $gte: daysAgo(30) } }),
     ]);
@@ -1202,6 +1210,7 @@ export const getAdminDashboard = catchAsync(async (req, res) => {
       charts: {
         registrationsByMonth: toMonthlySeries(regsByMonthAgg),
         berberRegistrationsByMonth: toMonthlySeries(berbersByMonthAgg),
+        loyaltyPointsByMonth: toMonthlySeries(loyaltyPointsByMonthAgg),
 
         genderBreakdown: genderAgg, // [{gender,count}]
         topCities: topCitiesAgg, // [{city,count}]

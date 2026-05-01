@@ -6,6 +6,7 @@ import catchAsync from "../utils/catchAsync.js";
 import sendResponse from "../utils/sendResponse.js";
 import { io } from "../server.js";
 import { Notification } from "../model/notification.model.js";
+import { loyaltyPoint } from "../model/loyalty.model.js";
 
 const SHOP_SELECT = "shopName name email avatar shopLogo role";
 const USER_SELECT = "name email avatar";
@@ -78,6 +79,12 @@ export const createLoyalty = catchAsync(async (req, res) => {
       },
     );
   }
+
+  await loyaltyPoint.create({
+    shopId,
+    userId,
+    campaignId: activeCampaign._id,
+  });
 
   const updatedDoc = await loyalty
     .findById(doc._id)
