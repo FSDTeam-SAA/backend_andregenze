@@ -1031,13 +1031,20 @@ export const getAdminDashboard = catchAsync(async (req, res) => {
     User.countDocuments({ role: "user" }),
     User.countDocuments({ status: "active", role: "user" }),
     User.countDocuments({ role: "berber" }),
-    loyaltyPoint.aggregate([
+    loyalty.aggregate([
       {
         $group: {
           _id: null,
-          grandTotal: { $sum: 1 },
-        },
-      },
+          grandTotal: {
+            $sum: {
+              $add: [
+                "$visitCount",
+                { $multiply: ["$totalGiftPoints", 10] }
+              ]
+            }
+          }
+        }
+      }
     ]),
     User.countDocuments({ role: "admin" }),
 
@@ -1096,7 +1103,7 @@ export const getAdminDashboard = catchAsync(async (req, res) => {
 
     // Registrations by month for selected year (all roles)
     User.aggregate([
-      { $match: {role: "user", createdAt: { $gte: start, $lt: end } } },
+      { $match: { role: "user", createdAt: { $gte: start, $lt: end } } },
       {
         $group: {
           _id: { $month: "$createdAt" },
@@ -1175,7 +1182,7 @@ export const getAdminDashboard = catchAsync(async (req, res) => {
 
   const [newUsers7d, newUsers30d, newBerbers7d, newBerbers30d] =
     await Promise.all([
-      User.countDocuments({role: "user", createdAt: { $gte: daysAgo(7) } }),
+      User.countDocuments({ role: "user", createdAt: { $gte: daysAgo(7) } }),
       User.countDocuments({ role: "user", createdAt: { $gte: daysAgo(30) } }),
       User.countDocuments({ role: "berber", createdAt: { $gte: daysAgo(7) } }),
       User.countDocuments({ role: "berber", createdAt: { $gte: daysAgo(30) } }),
