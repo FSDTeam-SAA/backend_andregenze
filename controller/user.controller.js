@@ -15,6 +15,7 @@ import {
   isSlotAvailable,
 } from "../utils/slotService.js";
 import { Campaign } from "../model/campaign.model.js";
+import { Vote } from "../model/vote.model.js";
 
 const DEFAULT_TZ = "Asia/Dhaka";
 
