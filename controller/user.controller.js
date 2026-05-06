@@ -41,8 +41,8 @@ const normalizeTimeString = (timeStr) => {
 const buildSocialMedia = (payload = {}) => {
   const source =
     payload.socialMedia &&
-      typeof payload.socialMedia === "object" &&
-      !Array.isArray(payload.socialMedia)
+    typeof payload.socialMedia === "object" &&
+    !Array.isArray(payload.socialMedia)
       ? payload.socialMedia
       : {};
 
@@ -352,7 +352,7 @@ export const searchBerbers = catchAsync(async (req, res) => {
           avgRating: r.avgRating,
           totalReviews: r.totalReviews,
         },
-      ])
+      ]),
     );
 
     const results = berbers.map((b) => {
@@ -615,7 +615,7 @@ export const searchBerbers = catchAsync(async (req, res) => {
         avgRating: r.avgRating,
         totalReviews: r.totalReviews,
       },
-    ])
+    ]),
   );
 
   const results = berbers.map((b) => {
@@ -832,10 +832,10 @@ export const getMyReservations = catchAsync(async (req, res) => {
       ...reservation.toObject(),
       berber: berber
         ? {
-          ...berber,
-          avatar: normalizeImageField(berber.avatar),
-          shopLogo: normalizeImageField(berber.shopLogo),
-        }
+            ...berber,
+            avatar: normalizeImageField(berber.avatar),
+            shopLogo: normalizeImageField(berber.shopLogo),
+          }
         : null,
     };
   });
@@ -917,18 +917,73 @@ export const getReviews = catchAsync(async (req, res) => {
 export const getCurrentContest = catchAsync(async (req, res) => {
   const userId = req.user?._id;
 
-  const contest = await Contest.findOne({ isActive: true }).populate({
-    path: "participants",
-    populate: {
-      path: "user",
-      select: "name avatar",
-    },
-    options: { sort: { votes: -1 } },
-  });
+  const contest = await Contest.findOne({ isActive: true });
 
+  if (!contest) {
+    return sendResponse(res, {
+      statusCode: httpStatus.NOT_FOUND,
+      success: false,
+      message: "No active contest found",
+      data: null,
+    });
+  }
+
+  // Get participants with vote status using aggregation
+  let participants = await Participation.aggregate([
+    { $match: { contest: contest._id, isDisqualified: false } },
+    {
+      $lookup: {
+        from: "users",
+        localField: "user",
+        foreignField: "_id",
+        as: "user",
+      },
+    },
+    { $unwind: "$user" },
+    {
+      $project: {
+        _id: 1,
+        photo: 1,
+        description: 1,
+        votes: 1,
+        frame: 1,
+        submittedAt: 1,
+        isDisqualified: 1,
+        createdAt: 1,
+        updatedAt: 1,
+        "user._id": 1,
+        "user.name": 1,
+        "user.avatar": 1,
+      },
+    },
+    { $sort: { votes: -1 } },
+  ]);
+
+  // Add hasVoted flag if user is logged in
+  if (userId && participants.length > 0) {
+    const participationIds = participants.map((p) => p._id);
+
+    const userVotes = await Vote.find({
+      user: userId,
+      participation: { $in: participationIds },
+    }).select("participation");
+
+    const votedParticipationIds = new Set(
+      userVotes.map((v) => v.participation.toString()),
+    );
+
+    participants = participants.map((participation) => ({
+      ...participation,
+      hasVoted: votedParticipationIds.has(participation._id.toString()),
+    }));
+  } else {
+    participants = participants.map((participation) => ({
+      ...participation,
+      hasVoted: false,
+    }));
+  }
 
   let myParticipation = null;
-
   if (userId) {
     myParticipation = await Participation.findOne({
       contest: contest._id,
@@ -936,12 +991,15 @@ export const getCurrentContest = catchAsync(async (req, res) => {
     }).populate("user", "name avatar");
   }
 
+  const contestResponse = contest.toObject ? contest.toObject() : contest;
+  contestResponse.participants = participants;
+
   sendResponse(res, {
     statusCode: httpStatus.OK,
     success: true,
     message: "Current contest fetched",
     data: {
-      contest,
+      contest: contestResponse,
       myParticipation,
     },
   });
@@ -949,7 +1007,9 @@ export const getCurrentContest = catchAsync(async (req, res) => {
 
 export const getAllBerbersWeb = catchAsync(async (req, res) => {
   const berbers = await User.find({ role: "berber" })
-    .select("-password -refreshToken -verificationInfo -password_reset_token -notifications -about -dataPrivacyConsent -showNotifications -emailNewsUpdates -emailBirthdayGifts -role -status -vendorStatus")
+    .select(
+      "-password -refreshToken -verificationInfo -password_reset_token -notifications -about -dataPrivacyConsent -showNotifications -emailNewsUpdates -emailBirthdayGifts -role -status -vendorStatus",
+    )
     .limit(20)
     .lean();
 
@@ -1037,21 +1097,18 @@ export const getAdminDashboard = catchAsync(async (req, res) => {
           _id: null,
           grandTotal: {
             $sum: {
-              $add: [
-                "$visitCount",
-                { $multiply: ["$totalGiftPoints", 10] }
-              ]
-            }
-          }
-        }
-      }
+              $add: ["$visitCount", { $multiply: ["$totalGiftPoints", 10] }],
+            },
+          },
+        },
+      },
     ]),
     User.countDocuments({ role: "admin" }),
 
     User.countDocuments({ role: "berber", vendorStatus: "pending" }),
     // User.countDocuments({ role: "berber", vendorStatus: "verified" }),
     Campaign.distinct("berber", {
-      endDate: { $gte: new Date() }
+      endDate: { $gte: new Date() },
     }),
 
     User.aggregate([
