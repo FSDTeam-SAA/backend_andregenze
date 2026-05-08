@@ -13,6 +13,13 @@ export const createContactUs = catchAsync(async (req, res) => {
     subject,
     message,
   });
+
+  await sendEmail(
+    process.env.CONTACT_FORM_TO,
+    "New Beardfriends contact request",
+    sendMessageTemplate({ email, name, subject, message })
+  )
+
   sendResponse(res, {
     statusCode: httpStatus.OK,
     success: true,
