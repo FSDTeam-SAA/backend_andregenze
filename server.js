@@ -47,6 +47,11 @@ app.get("/", (req, res) => {
   res.send("Server is running...!!");
 });
 
+app.get("/robots.txt", (req, res) => {
+  res.type("text/plain");
+  res.send("User-agent: *\nDisallow: /");
+});
+
 app.use(globalErrorHandler);
 app.use(notFound);
 
