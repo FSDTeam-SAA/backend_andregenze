@@ -1,5 +1,9 @@
 import admin from "firebase-admin";
-import serviceAccount from "../beardfriend.json" with { type: "json" };
+import fs from "fs";
+
+const serviceAccount = JSON.parse(
+  fs.readFileSync(new URL("../beardfriend.json", import.meta.url))
+);
 
 if (!admin.apps.length) {
   admin.initializeApp({
