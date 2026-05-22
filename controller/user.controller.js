@@ -16,6 +16,7 @@ import {
 } from "../utils/slotService.js";
 import { Campaign } from "../model/campaign.model.js";
 import { Vote } from "../model/vote.model.js";
+import { sendLocalizedNotification } from "../utils/notificationService.js";
 
 const DEFAULT_TZ = "Asia/Dhaka";
 
@@ -165,6 +166,7 @@ export const updateProfile = catchAsync(async (req, res) => {
   if (updates.phone) user.phone = updates.phone;
   if (updates.address2) user.address2 = updates.address2;
   if (updates.language) user.language = updates.language;
+  if(updates.selectedLanguage) user.selectedLanguage = updates.selectedLanguage;
 
   if (updates.contactPersonName)
     user.contactPersonName = updates.contactPersonName;
@@ -729,6 +731,16 @@ export const createReservation = catchAsync(async (req, res) => {
   });
 
   await reservation.populate(["user", "berber"], "name shopName avatar");
+
+  await sendLocalizedNotification({
+    userId: berber._id,
+    type: "NEW_RESERVATION_RECEIVED",
+    placeholders: {
+      member_name: req.user.name || reservation.user?.name || "Customer",
+      time: normalizedTime,
+    },
+  });
+
   sendResponse(res, {
     statusCode: httpStatus.CREATED,
     success: true,
@@ -785,6 +797,15 @@ export const updateReservation = catchAsync(async (req, res) => {
   await reservation.save();
 
   await reservation.populate(["user", "berber"], "name shopName avatar");
+
+  await sendLocalizedNotification({
+    userId: berber._id,
+    type: "RESERVATION_CHANGED_OR_CANCELLED",
+    placeholders: {
+      member_name: req.user.name || reservation.user?.name || "Customer",
+    },
+  });
+
   sendResponse(res, {
     statusCode: httpStatus.OK,
     success: true,
@@ -802,6 +823,14 @@ export const deleteReservation = catchAsync(async (req, res) => {
   );
   if (!reservation)
     throw new AppError(httpStatus.NOT_FOUND, "Reservation not found");
+
+  await sendLocalizedNotification({
+    userId: reservation.berber,
+    type: "RESERVATION_CHANGED_OR_CANCELLED",
+    placeholders: {
+      member_name: req.user.name || "Customer",
+    },
+  });
 
   sendResponse(res, {
     statusCode: httpStatus.OK,

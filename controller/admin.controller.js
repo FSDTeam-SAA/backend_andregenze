@@ -46,6 +46,8 @@ export const getContests = catchAsync(async (req, res) => {
     .populate("winners", "photo votes submittedAt user status")
     .sort({ startDate: -1 });
 
+
+
   sendResponse(res, {
     statusCode: httpStatus.OK,
     success: true,

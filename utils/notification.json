@@ -1,0 +1,64 @@
+{
+  "NEW_CONTEST_STARTED": {
+    "DE": "🔥 Neuer Beard Contest gestartet!\nZeig deinen Bart und sichere dir Stimmen der Community.",
+    "EN": "🔥 A new Beard Contest has started!\nShow your beard and get votes from the community.",
+    "FR": "🔥 Un nouveau concours de barbe a commencé !\nMontre ta barbe et récolte les votes de la communauté.",
+    "ES": "🔥 ¡Ha comenzado un nuevo concurso de barba!\nMuestra tu barba y consigue votos de la comunidad.",
+    "IT": "🔥 È iniziato un nuovo concorso di barbe!\nMostra la tua barba e ottieni voti dalla community.",
+    "NL": "🔥 Een nieuwe baardwedstrijd is gestart!\nLaat je baard zien en ontvang stemmen van de community."
+  },
+
+  "CONTEST_ENDS_TOMORROW": {
+    "DE": "⏳ Der Beard Contest endet morgen!\nSammle jetzt noch letzte Stimmen.",
+    "EN": "⏳ The Beard Contest ends tomorrow!\nGet your final votes now.",
+    "FR": "⏳ Le concours de barbe se termine demain !\nObtiens tes derniers votes maintenant.",
+    "ES": "⏳ ¡El concurso de barba termina mañana!\nConsigue tus últimos votos ahora.",
+    "IT": "⏳ Il concorso di barbe termina domani!\nOttieni subito gli ultimi voti.",
+    "NL": "⏳ De baardwedstrijd eindigt morgen!\nVerzamel nu je laatste stemmen."
+  },
+
+  "APPOINTMENT_REMINDER": {
+    "DE": "📅 Erinnerung: Dein Termin bei {barbershop_name} ist morgen um {time}.",
+    "EN": "📅 Reminder: Your appointment at {barbershop_name} is tomorrow at {time}.",
+    "FR": "📅 Rappel : Ton rendez-vous chez {barbershop_name} est demain à {time}.",
+    "ES": "📅 Recordatorio: Tu cita en {barbershop_name} es mañana a las {time}.",
+    "IT": "📅 Promemoria: Il tuo appuntamento da {barbershop_name} è domani alle {time}.",
+    "NL": "📅 Herinnering: Je afspraak bij {barbershop_name} is morgen om {time}."
+  },
+
+  "NEW_RESERVATION_RECEIVED": {
+    "DE": "✂️ Neue Terminbuchung erhalten von {member_name} für {time}.",
+    "EN": "✂️ New appointment booked by {member_name} for {time}.",
+    "FR": "✂️ Nouvelle réservation reçue de {member_name} pour {time}.",
+    "ES": "✂️ Nueva reserva recibida de {member_name} para {time}.",
+    "IT": "✂️ Nuova prenotazione ricevuta da {member_name} per {time}.",
+    "NL": "✂️ Nieuwe afspraak ontvangen van {member_name} voor {time}."
+  },
+
+  "RESERVATION_CHANGED_OR_CANCELLED": {
+    "DE": "⚠️ {member_name} hat einen Termin geändert oder storniert.",
+    "EN": "⚠️ {member_name} changed or cancelled an appointment.",
+    "FR": "⚠️ {member_name} a modifié ou annulé un rendez-vous.",
+    "ES": "⚠️ {member_name} cambió o canceló una cita.",
+    "IT": "⚠️ {member_name} ha modificato o annullato un appuntamento.",
+    "NL": "⚠️ {member_name} heeft een afspraak gewijzigd of geannuleerd."
+  },
+
+  "RESERVATION_APPROVED": {
+    "DE": "✅ Dein Termin bei {barbershop_name} wurde bestätigt.",
+    "EN": "✅ Your appointment at {barbershop_name} has been confirmed.",
+    "FR": "✅ Ton rendez-vous chez {barbershop_name} a été confirmé.",
+    "ES": "✅ Tu cita en {barbershop_name} ha sido confirmada.",
+    "IT": "✅ Il tuo appuntamento da {barbershop_name} è stato confermato.",
+    "NL": "✅ Je afspraak bij {barbershop_name} is bevestigd."
+  },
+
+  "RESERVATION_DECLINED": {
+    "DE": "❌ Dein Termin bei {barbershop_name} wurde abgelehnt.",
+    "EN": "❌ Your appointment at {barbershop_name} was declined.",
+    "FR": "❌ Ton rendez-vous chez {barbershop_name} a été refusé.",
+    "ES": "❌ Tu cita en {barbershop_name} fue rechazada.",
+    "IT": "❌ Il tuo appuntamento da {barbershop_name} è stato rifiutato.",
+    "NL": "❌ Je afspraak bij {barbershop_name} is afgewezen."
+  }
+}

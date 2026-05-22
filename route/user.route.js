@@ -19,6 +19,7 @@ import {
 } from "../controller/user.controller.js";
 import { protect } from "../middleware/auth.middleware.js";
 import upload from "../middleware/multer.middleware.js";
+import { createFCM } from "../controller/fcm.controller.js";
 
 const router = express.Router();
 
@@ -53,5 +54,10 @@ router.delete("/reservations/:id", protect, deleteReservation);
 router.post("/reviews", protect, addReview);
 router.get("/reviews/:berberId", getReviews);
 router.get("/admin/dashboard", getAdminDashboard);
+
+router.post("/update-fcm-token", protect,
+  createFCM
+);
+
 
 export default router;

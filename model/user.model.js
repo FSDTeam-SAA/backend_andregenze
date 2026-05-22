@@ -61,6 +61,7 @@ const userSchema = new Schema(
     },
     // staffMembers: [{ type: Schema.Types.ObjectId, ref: "User" }],
     staffMembers: {type: Number, default: 0},
+    selectedLanguage: { type: String, default: "En" },
     status: {
       type: String,
       enum: ["active", "inactive", "blocked", "deleted"],

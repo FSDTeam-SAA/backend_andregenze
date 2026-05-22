@@ -6,6 +6,7 @@ import { Participation } from "../model/participation.model.js";
 import { Reservation } from "../model/reservation.model.js";
 import { User } from "../model/user.model.js";
 import { Vote } from "../model/vote.model.js";
+import { sendLocalizedNotification } from "../utils/notificationService.js";
 import catchAsync from "../utils/catchAsync.js";
 import { uploadOnCloudinary } from "../utils/commonMethod.js";
 import sendResponse from "../utils/sendResponse.js";
@@ -384,6 +385,15 @@ export const confirmReservation = catchAsync(async (req, res) => {
   await reservation.save();
 
   await reservation.populate(["user", "berber"], "name shopName avatar");
+
+  await sendLocalizedNotification({
+    userId: reservation.user,
+    type: "RESERVATION_APPROVED",
+    placeholders: {
+      barbershop_name: reservation.berber?.shopName || "Barbershop",
+    },
+  });
+
   sendResponse(res, {
     statusCode: httpStatus.OK,
     success: true,
