@@ -770,9 +770,17 @@ export const updateReservation = catchAsync(async (req, res) => {
     throw new AppError(httpStatus.BAD_REQUEST, "Invalid time format");
   }
 
+  let filter = {_id: id}
+
+  if(req.user.role == "user"){
+    filter.user = req.user._id
+  }
+  else if(req.user.role == "berber"){
+    filter.berber = req.user._id
+  }
+
   const reservation = await Reservation.findOne({
-    _id: id,
-    user: req.user._id,
+    ...filter,
   });
   if (!reservation)
     throw new AppError(httpStatus.NOT_FOUND, "Reservation not found");
