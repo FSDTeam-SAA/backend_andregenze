@@ -738,6 +738,11 @@ export const createReservation = catchAsync(async (req, res) => {
     placeholders: {
       member_name: req.user.name || reservation.user?.name || "Customer",
       time: normalizedTime,
+      date: new Date(date).toLocaleDateString(berber.selectedLanguage || "en-US", {
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+      }),
     },
   });
 
@@ -751,7 +756,7 @@ export const createReservation = catchAsync(async (req, res) => {
 
 export const updateReservation = catchAsync(async (req, res) => {
   const { id } = req.params;
-  const { date, time } = req.body;
+  const { date, time,status } = req.body;
 
   if (!date || !time) {
     throw new AppError(
@@ -800,11 +805,24 @@ export const updateReservation = catchAsync(async (req, res) => {
 
   await sendLocalizedNotification({
     userId: berber._id,
-    type: "RESERVATION_CHANGED_OR_CANCELLED",
+    type: "RESERVATION_CHANGED",
     placeholders: {
       member_name: req.user.name || reservation.user?.name || "Customer",
     },
   });
+
+  if(status){
+    reservation.status = status;
+    await reservation.save();
+    await reservation.populate(["user", "berber"], "name shopName avatar");
+    await sendLocalizedNotification({
+      userId: berber._id,
+      type: status === "cancelled" ? "RESERVATION_CANCELLED" : "RESERVATION_CONFIRMED",
+      placeholders: {
+        member_name: req.user.name || reservation.user?.name || "Customer",
+      },
+    });
+  }
 
   sendResponse(res, {
     statusCode: httpStatus.OK,
@@ -947,7 +965,7 @@ export const getReviews = catchAsync(async (req, res) => {
 export const getCurrentContest = catchAsync(async (req, res) => {
   const userId = req.user?._id;
 
-  const contest = await Contest.findOne({ isActive: true });
+  const contest = await Contest.findOne({ isActive: true , endDate: { $gte: new Date() } }).sort({ createdAt: -1 });
 
   if (!contest) {
     return sendResponse(res, {

@@ -39,3 +39,17 @@ export const markAsRead = catchAsync(async (req, res) => {
     message: "Notification marked as read",
   });
 });
+
+
+export const markAsReadAll = catchAsync(async (req, res) => {
+  const userId = req.user._id;
+  await Notification.updateMany({ user: userId, isRead: false }, { isRead: true });
+  io.to(userId.toString()).emit("notificationsUpdated", {
+    updated: true,
+  });
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: "Notification marked as read",
+  });
+});
