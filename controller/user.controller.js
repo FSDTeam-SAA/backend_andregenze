@@ -733,6 +733,7 @@ export const createReservation = catchAsync(async (req, res) => {
   await reservation.populate(["user", "berber"], "name shopName avatar");
 
   await sendLocalizedNotification({
+    title: "New Reservation Received",
     userId: berber._id,
     type: "NEW_RESERVATION_RECEIVED",
     placeholders: {
@@ -812,8 +813,9 @@ export const updateReservation = catchAsync(async (req, res) => {
   await reservation.populate(["user", "berber"], "name shopName avatar");
 
   await sendLocalizedNotification({
+    title: "Reservation Updated",
     userId: berber._id,
-    type: "RESERVATION_CHANGED",
+    type: "RESERVATION_CHANGED_OR_CANCELLED",
     placeholders: {
       member_name: req.user.name || reservation.user?.name || "Customer",
     },
@@ -824,8 +826,9 @@ export const updateReservation = catchAsync(async (req, res) => {
     await reservation.save();
     await reservation.populate(["user", "berber"], "name shopName avatar");
     await sendLocalizedNotification({
+      title: status === "cancelled" ? "Reservation Cancelled" : "Reservation Confirmed",
       userId: berber._id,
-      type: status === "cancelled" ? "RESERVATION_CANCELLED" : "RESERVATION_CONFIRMED",
+      type: status === "cancelled" ? "RESERVATION_CHANGED_OR_CANCELLED" : "RESERVATION_CONFIRMED",
       placeholders: {
         member_name: req.user.name || reservation.user?.name || "Customer",
       },
@@ -851,6 +854,7 @@ export const deleteReservation = catchAsync(async (req, res) => {
     throw new AppError(httpStatus.NOT_FOUND, "Reservation not found");
 
   await sendLocalizedNotification({
+    title: "Reservation Cancelled",
     userId: reservation.berber,
     type: "RESERVATION_CHANGED_OR_CANCELLED",
     placeholders: {
@@ -977,8 +981,8 @@ export const getCurrentContest = catchAsync(async (req, res) => {
 
   if (!contest) {
     return sendResponse(res, {
-      statusCode: httpStatus.NOT_FOUND,
-      success: false,
+      statusCode: httpStatus.OK,
+      success: true,
       message: "No active contest found",
       data: null,
     });

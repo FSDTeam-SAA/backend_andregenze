@@ -387,10 +387,13 @@ export const confirmReservation = catchAsync(async (req, res) => {
   await reservation.populate(["user", "berber"], "name shopName avatar");
 
   await sendLocalizedNotification({
+    title: "Reservation Confirmed",
     userId: reservation.user,
     type: "RESERVATION_APPROVED",
     placeholders: {
       barbershop_name: reservation.berber?.shopName || "Barbershop",
+      date: reservation.date,
+      time: reservation.time,
     },
   });
 
@@ -705,7 +708,12 @@ export const getCurrentContest = catchAsync(async (req, res) => {
   });
 
   if (!contest) {
-    throw new AppError(httpStatus.NOT_FOUND, "No active contest");
+   return sendResponse(res, {
+      statusCode: httpStatus.OK,
+      success: true,
+      message: "No active contest",
+      data: null,
+    });
   }
 
   let myParticipation = null;

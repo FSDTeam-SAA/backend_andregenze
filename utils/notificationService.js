@@ -22,6 +22,15 @@ const LANGUAGE_MAP = {
   NL: "NL",
 };
 
+const LOCALE_MAP = {
+  EN: "en-US",
+  DE: "de-DE",
+  FR: "fr-FR",
+  ES: "es-ES",
+  IT: "it-IT",
+  NL: "nl-NL",
+};
+
 const normalizeLanguage = (value) => {
   if (!value) return "EN";
   const normalized = String(value).trim().toUpperCase();
@@ -30,10 +39,23 @@ const normalizeLanguage = (value) => {
   return LANGUAGE_MAP[prefix] || "EN";
 };
 
-const fillPlaceholders = (text, placeholders = {}) => {
+const formatPlaceholderValue = (value, locale) => {
+  if (value instanceof Date) {
+    return new Intl.DateTimeFormat(locale, {
+      timeZone: "UTC",
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+    }).format(value);
+  }
+
+  return value;
+};
+
+const fillPlaceholders = (text, placeholders = {}, locale = "en-US") => {
   if (typeof text !== "string") return text;
   return text.replace(/\{([^}]+)\}/g, (match, key) => {
-    const value = placeholders[key];
+    const value = formatPlaceholderValue(placeholders[key], locale);
     return value === undefined || value === null ? match : String(value);
   });
 };
@@ -43,10 +65,12 @@ export const getLocalizedNotificationText = (type, language, placeholders = {}) 
   if (!section) return "You have a new notification.";
   const langKey = normalizeLanguage(language);
   const template = section[langKey] || section.EN;
-  return fillPlaceholders(template, placeholders);
+  const locale = LOCALE_MAP[langKey] || "en-US";
+  return fillPlaceholders(template, placeholders, locale);
 };
 
 export const sendLocalizedNotification = async ({
+  title,
   userId,
   type,
   placeholders = {},
@@ -62,16 +86,16 @@ export const sendLocalizedNotification = async ({
     user.selectedLanguage || user.language || "EN",
     placeholders,
   );
-  const title = String(message).split("\n")[0].slice(0, 45);
+  const notificationTitle =  title || type;
 
   if (saveToDb) {
     await Notification.create({
       user: userId,
-      title,
+      title: notificationTitle,
       message,
       type,
     });
   }
 
-  await sendPushNotification([userId], title, message);
+  await sendPushNotification([userId], notificationTitle, message);
 };

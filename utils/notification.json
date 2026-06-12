@@ -27,12 +27,12 @@
   },
 
   "NEW_RESERVATION_RECEIVED": {
-    "DE": "✂️ Neue Terminbuchung erhalten von {member_name} für {time}.",
-    "EN": "✂️ New appointment booked by {member_name} for {time}.",
-    "FR": "✂️ Nouvelle réservation reçue de {member_name} pour {time}.",
-    "ES": "✂️ Nueva reserva recibida de {member_name} para {time}.",
-    "IT": "✂️ Nuova prenotazione ricevuta da {member_name} per {time}.",
-    "NL": "✂️ Nieuwe afspraak ontvangen van {member_name} voor {time}."
+    "DE": "✂️ Neue Terminbuchung erhalten von {member_name} für {time} at {date}.",
+    "EN": "✂️ New appointment booked by {member_name} for {time} at {date}.",
+    "FR": "✂️ Nouvelle réservation reçue de {member_name} pour {time} à {date}.",
+    "ES": "✂️ Nueva reserva recibida de {member_name} para {time} a las {date}.",
+    "IT": "✂️ Nuova prenotazione ricevuta da {member_name} per {time} alle {date}.",
+    "NL": "✂️ Nieuwe afspraak ontvangen van {member_name} voor {time} op {date}."
   },
 
   "RESERVATION_CHANGED_OR_CANCELLED": {
