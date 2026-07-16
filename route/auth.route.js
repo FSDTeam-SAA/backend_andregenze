@@ -5,7 +5,7 @@ import {
   login,
   logout,
   refreshToken,
-  register,
+  register, 
   resendOTP,
   resetPassword,
   verifyOTP,
