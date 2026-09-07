@@ -1014,6 +1014,7 @@ export const getCurrentContest = catchAsync(async (req, res) => {
         "user._id": 1,
         "user.name": 1,
         "user.avatar": 1,
+        "user.email": 1,
       },
     },
     { $sort: { votes: -1 } },
@@ -1048,7 +1049,7 @@ export const getCurrentContest = catchAsync(async (req, res) => {
     myParticipation = await Participation.findOne({
       contest: contest._id,
       user: userId,
-    }).populate("user", "name avatar");
+    }).populate("user", "name avatar email");
   }
 
   const contestResponse = contest.toObject ? contest.toObject() : contest;
