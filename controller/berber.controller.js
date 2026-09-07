@@ -43,6 +43,19 @@ const buildSocialMedia = (payload = {}) => {
   );
 };
 
+const hidePhotoForInactiveSubmitter = (participation) => {
+  if (!participation) return participation;
+
+  const { user } = participation;
+  const shouldHidePhoto = ["blocked", "deleted"].includes(user?.status);
+
+  if (user && typeof user === "object") {
+    delete user.status;
+  }
+
+  return shouldHidePhoto ? { ...participation, photo: null } : participation;
+};
+
 export const setupBerberProfile = catchAsync(async (req, res) => {
   const user = await User.findById(req.user._id);
   if (!user) throw new AppError(httpStatus.NOT_FOUND, "User not found");
@@ -1028,7 +1041,7 @@ export const getHallOfFameWeb = catchAsync(async (req, res) => {
         select: "photo votes submittedAt description frame",
         populate: {
           path: "user",
-          select: "name avatar",
+          select: "name avatar status",
         },
       })
       .sort({ startDate: -1 })
@@ -1042,7 +1055,7 @@ export const getHallOfFameWeb = catchAsync(async (req, res) => {
         startDate: contest.startDate,
         endDate: contest.endDate,
       },
-      participants: contest.participants || [],
+      participants: (contest.participants || []).map(hidePhotoForInactiveSubmitter),
     }));
 
     return sendResponse(res, {
@@ -1064,7 +1077,7 @@ export const getHallOfFameWeb = catchAsync(async (req, res) => {
       select: "photo votes submittedAt description frame",
       populate: {
         path: "user",
-        select: "name avatar",
+        select: "name avatar status",
       },
     })
     .sort({ startDate: -1 })
@@ -1077,7 +1090,7 @@ export const getHallOfFameWeb = catchAsync(async (req, res) => {
       startDate: contest.startDate,
       endDate: contest.endDate,
     },
-    winner: contest.winners?.[0] || null,
+    winner: hidePhotoForInactiveSubmitter(contest.winners?.[0]) || null,
   }));
 
   sendResponse(res, {
